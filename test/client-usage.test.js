@@ -7,11 +7,17 @@ import { test } from "node:test";
 // rendered tree without a browser.
 const BUNDLE = new URL("../lib/client.js", import.meta.url);
 
-function loadBundle() {
+function loadBundle({ executeEffects = false } = {}) {
 	const source = readFileSync(BUNDLE, "utf8");
 	const entries = [];
 	const FRAGMENT = Symbol("Fragment");
-	const fakeWindow = { __ModuleLoader__: { load: (entry) => entries.push(entry) } };
+	const fakeWindow = {
+		__ModuleLoader__: { load: (entry) => entries.push(entry) },
+		addEventListener: () => {},
+		removeEventListener: () => {},
+		innerWidth: 1440,
+		innerHeight: 900
+	};
 	const record = (type, props, key) => ({ type, props: props ?? {}, key });
 	const fakeRequire = (id) => {
 		switch (id) {
@@ -20,7 +26,7 @@ function loadBundle() {
 					Fragment: FRAGMENT,
 					useState: (initial) => [typeof initial === "function" ? initial() : initial, () => {}],
 					useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
-					useEffect: () => {},
+					useEffect: executeEffects ? (fn) => { fn(); } : () => {},
 					useRef: (initial) => ({ current: initial ?? null }),
 					useCallback: (fn) => fn,
 					createElement: () => null
@@ -276,6 +282,41 @@ test("footer action reports an open card", () => {
 	const tree = mod.usageFooterAction({ store, t: tr });
 	const button = nodesWhere(tree, (node) => node.type === "button")[0];
 	assert.equal(button.props["aria-expanded"], "true");
+});
+
+test("footer placement effect runs without throwing and falls back when the account row is absent", () => {
+	const saved = {
+		window: globalThis.window,
+		document: globalThis.document,
+		MutationObserver: globalThis.MutationObserver
+	};
+	globalThis.window = {
+		innerWidth: 1440,
+		innerHeight: 900,
+		addEventListener: () => {},
+		removeEventListener: () => {}
+	};
+	globalThis.document = {
+		body: {},
+		querySelectorAll: () => []
+	};
+	globalThis.MutationObserver = undefined;
+	try {
+		const { mod: effectMod } = loadBundle({ executeEffects: true });
+		const store = fakeStore({ plans: [OPENCODE], status: "ok" });
+		// The effect calls the account-row measurement during mount. A missing
+		// helper or a DOM shape the effect does not guard would throw here; the
+		// fallback must keep the trigger renderable instead.
+		const tree = effectMod.usageFooterAction({ store, t: tr });
+		assert.equal(nodesWhere(tree, (node) => node.type === "button").length, 1);
+	} finally {
+		if (saved.window === undefined) delete globalThis.window;
+		else globalThis.window = saved.window;
+		if (saved.document === undefined) delete globalThis.document;
+		else globalThis.document = saved.document;
+		if (saved.MutationObserver === undefined) delete globalThis.MutationObserver;
+		else globalThis.MutationObserver = saved.MutationObserver;
+	}
 });
 
 // ── rendered card ─────────────────────────────────────────────────────────
