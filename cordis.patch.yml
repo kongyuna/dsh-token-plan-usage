@@ -1,0 +1,9 @@
+# dsh-token-plan-usage — profile bundle patch.
+#
+# `install_bundle` installs the package and reconciles this file into the
+# profile's bundle layer stack. This row inserts the plugin; its optional
+# config is documented in README.md. All values are optional: with no config
+# the plugin auto-discovers plans from the credentials you already store.
+- insert:
+    - id: dsh-token-plan-usage
+      name: dsh-token-plan-usage

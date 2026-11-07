@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Token Plan Usage",
+    "description": "View token-plan consumption for OpenCode Go, Xiaomi MiMo, and DeepSeek from the sidebar. Read-only: no model adapter."
+  }
+}
