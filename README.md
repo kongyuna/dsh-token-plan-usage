@@ -2,7 +2,7 @@
 
 [English](README.en.md) | 中文
 
-一个**只读用量**的 DSH 插件：在侧栏底部常驻一枚双半圆环，点开查看多个 token plan 的消耗。它从
+一个**只读用量**的 DSH 插件：在侧栏账号行的右侧常驻一枚双半圆环，点开查看多个 token plan 的消耗。它从
 [dsh-opencode-go-plus](https://github.com/yumusb/dsh-opencode-go-plus)（以及
 [kongyuna 的个人 fork](https://github.com/kongyuna/kongyuna-opencode-go-plus)）的用量面板里把「环 + 卡片」
 抽出来，去掉了模型适配器、模型目录、响应修复和账号菜单 DOM 注入，改成官方 slot 实现。
@@ -17,7 +17,7 @@
 
 ## 界面
 
-- **侧栏底部**：Settings 旁边一枚 36px 按钮，内含 28px 双半圆环。
+- **侧栏账号行右侧**（头像/名称同一行）：一枚 36px 按钮，内含 28px 双半圆环；不再占用 Remote/Settings 那一行。
   - 上弧 = 所有 plan 里「短窗」（5 小时/rolling）的最大已用百分比；
   - 下弧 = 所有 plan 里「长窗」（每周/每月）的最大已用百分比；
   - 某窗口 `rate-limited` / `expired` / ≥100% 时整环灰显；
@@ -48,7 +48,7 @@ plugin_manager install_bundle target=/absolute/path/to/dsh-token-plan-usage
 dsh plugin --profile web add "/absolute/path/to/dsh-token-plan-usage"
 ```
 
-安装后侧栏底部出现圆环。若 DSH 提示 `restart-required`，重启 DSH；HMR 生效时刷新页面即可。
+安装后侧栏账号行右侧出现圆环。若 DSH 提示 `restart-required`，重启 DSH；HMR 生效时刷新页面即可。
 
 卸载：在 DSH 的插件页卸载 `dsh-token-plan-usage`，或对应 profile 的 `dsh plugin remove dsh-token-plan-usage`。
 
@@ -148,14 +148,14 @@ dsh plugin --profile web add "/absolute/path/to/dsh-token-plan-usage"
 
 - 两者可以同时安装：`dsh-opencode-go-plus` 负责模型适配器与模型选择；本插件只读用量。
 - 本插件**不修改** `dsh-opencode-go-plus` 的配置文件、不卸载它、不写它的 settings namespace，只读取它的 `baseURL`/`apiKeyEnv` 作为默认值。
-- 如果你的 `dsh-opencode-go-plus` 版本里 already 有用量环，本插件与它不是替代关系：它的环绑定在账号菜单/侧栏 DOM 注入上；本插件走官方 slot，适合只想要用量、或希望多 plan 汇总的场景。
+- 如果你的 `dsh-opencode-go-plus` 版本里 already 有用量环，本插件与它不是替代关系：它的环绑定在账号菜单/侧栏 DOM 注入上；本插件走官方 `shell.overlay` slot，把按钮浮在账号行右侧、卡片浮层显示，不做 DOM 注入。
 
 ---
 
 ## 兼容性
 
 - 基线：DSH **0.2.1-rc.5**（桌面版），Node ≥ 22.19.0。
-- `engines.dsh`: `>=0.2.1-rc.2 <0.3.0-0`；依赖官方 slot `sidebar.footer.action` 与 `shell.overlay`。
+- `engines.dsh`: `>=0.2.1-rc.2 <0.3.0-0`；依赖官方 slot `shell.overlay` 与对账号行的几何测量。
 - 不依赖任何 `@deepseek-ai/*` npm 包，不引入 pi-ai。
 - 客户端通过 DSH 的 module-loader 加载；无 React 运行时复制、无 DOM 注入、无 `<style>` 注入。
 

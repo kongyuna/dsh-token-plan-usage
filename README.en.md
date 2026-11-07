@@ -1,7 +1,8 @@
 # dsh-token-plan-usage
 
-A read-only DSH plugin that shows token-plan consumption from the sidebar: one
-two-half ring beside Settings, one popover card. Adapted from the usage panel in
+A read-only DSH plugin that shows token-plan consumption from the sidebar:
+one two-half ring at the right edge of the account row, one popover card.
+Adapted from the usage panel in
 [dsh-opencode-go-plus](https://github.com/yumusb/dsh-opencode-go-plus) and
 [kongyuna/kongyuna-opencode-go-plus](https://github.com/kongyuna/kongyuna-opencode-go-plus),
 with the model adapter, model catalog, response repair layer, and account-menu
