@@ -8,6 +8,7 @@
 - 当前配置（`~/.dsh/dsh-token-plan-usage.json`）：卡片显示 `opencode-go` + `deepseek`（完整信息）；圆环上半 `opencode-go rolling`，下半 `deepseek balance`，满额 200。
 - 口径：UI 显示剩余（100−used）；圆环上半/下半按详情页独立选择。
 - 测试：`node --test` 129 pass / 0 fail / 0 skipped；`node --check lib/*.js` 通过。
+- [x] 详情页减负：README 从长文压成 8 条短说明；locale 描述缩短；配置卡不再被长 README 推到页面底部（v0.4.1）。
 - [x] UI 收尾：保存按钮改为主题中性色（原 brand token 在深色主题变白导致白底白字）；配置页删掉多余说明，只留标题/套餐勾选/指标/圆环上下半。
 - 未验证：新版左右双卡/示例预览未做真机截图（页面外观需用户刷新后确认）；配置路由、配置卡片渲染/多套餐/圆环槽位/容量比例已有测试与 curl 证据。
 - 下一步（如需）：打开 DSH → 设置 → 插件 → Token Plan 用量，确认可视化配置页；若打开后无配置卡，查 `plugins.bundle.config` 注册与 host `/dsh-token-plan-usage/config` 路由。

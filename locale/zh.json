@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Token Plan 用量",
-    "description": "在侧栏查看 OpenCode Go、小米 MiMo 与 DeepSeek 等 token plan 的用量；只读用量，不注册模型适配器。"
+    "description": "查看 OpenCode Go、DeepSeek、小米等 token plan 的剩余用量；可配置圆环和卡片。"
   }
 }
