@@ -1,6 +1,6 @@
 {
   "name": "dsh-token-plan-usage",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "private": true,
   "description": "DSH plugin: a standalone viewer for token-plan consumption (OpenCode Go, Xiaomi MiMo, DeepSeek) with no LLM adapter.",
   "icon": "icon.svg",
@@ -54,7 +54,8 @@
       "inject": [
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-slots",
-        "@deepseek-ai/dsh-client-ui-sidebar"
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
       ]
     }
   }

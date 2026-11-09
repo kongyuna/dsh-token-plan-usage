@@ -214,21 +214,35 @@ test("summarize treats a reached limit as exhausted", () => {
 
 test("summarize falls back when only a monthly window exists", () => {
 	const summary = mod.usageFormat.summarize([{ ...XIAOMI, status: "ok", windows: [{ key: "monthly", kind: "percent", usedPercent: 42 }] }]);
-	assert.equal(summary.top, 0);
-	assert.equal(summary.bottom, 58);
+	assert.equal(summary.top, 58);
+	assert.equal(summary.bottom, 0);
 	assert.equal(summary.hasPercent, true);
 });
 
-test("summarize picks the tightest remaining headroom across plans", () => {
-	const tight = {
+test("summarize uses only the icon plan when the card shows several plans", () => {
+	const deepseek = { id: "deepseek", kind: "deepseek-balance", label: "DeepSeek", status: "ok", windows: [{ key: "balance", kind: "amount", amount: 1, currency: "CNY" }] };
+	const summary = mod.usageFormat.summarize([OPENCODE, deepseek], "opencode-go");
+	assert.equal(summary.top, 80);
+	assert.equal(summary.bottom, 12);
+	assert.equal(summary.topEntry.plan.id, "opencode-go");
+	const balanceOnly = mod.usageFormat.summarize([OPENCODE, deepseek], "deepseek");
+	assert.equal(balanceOnly.hasPercent, false);
+});
+
+test("summarize follows the configured window order (first two drive the ring)", () => {
+	const reordered = {
 		...OPENCODE,
-		id: "tight",
-		label: "Tight plan",
-		windows: [{ key: "rolling", kind: "percent", status: "ok", usedPercent: 95 }]
+		windows: [
+			{ key: "monthly", kind: "percent", status: "ok", usedPercent: 46 },
+			{ key: "rolling", kind: "percent", status: "ok", usedPercent: 20 },
+			{ key: "weekly", kind: "percent", status: "ok", usedPercent: 88 }
+		]
 	};
-	const summary = mod.usageFormat.summarize([OPENCODE, tight]);
-	assert.equal(summary.top, 5);
-	assert.equal(summary.topEntry.plan.id, "tight");
+	const summary = mod.usageFormat.summarize([reordered]);
+	assert.equal(summary.top, 54);
+	assert.equal(summary.bottom, 80);
+	assert.equal(summary.topEntry.window.key, "monthly");
+	assert.equal(summary.bottomEntry.window.key, "rolling");
 });
 
 test("plan section prints remaining percentages instead of used", () => {
@@ -286,6 +300,43 @@ test("statusText localizes every known failure", () => {
 });
 
 // ── rendered footer ───────────────────────────────────────────────────────
+
+test("display config card renders multi-select plans, metrics and the icon choice", () => {
+	const tree = mod.displayConfigCard({
+		t: tr,
+		store: fakeStore({}),
+		initialData: {
+			status: "ready",
+			error: null,
+			plans: [
+				{ id: "opencode-go", kind: "opencode-go", label: "OpenCode Go", metrics: ["rolling", "weekly", "monthly"] },
+				{ id: "deepseek", kind: "deepseek-balance", label: "DeepSeek", metrics: ["balance"] }
+			],
+			selectedPlans: [
+				{ id: "opencode-go", windows: ["rolling", "monthly"] },
+				{ id: "deepseek", windows: ["balance"] }
+			],
+			iconPlanId: "opencode-go"
+		}
+	});
+	const texts = textsOf(tree);
+	for (const expected of ["显示内容", "勾选要显示的套餐", "OpenCode Go", "DeepSeek", "侧栏圆环显示", "保存"]) {
+		assert.ok(texts.includes(expected), `missing ${expected}; got ${texts.join(" | ")}`);
+	}
+	assert.ok(texts.some((text) => text.includes("5 小时")));
+	assert.ok(texts.some((text) => text.includes("余额")));
+	assert.ok(texts.some((text) => text.includes("每月")));
+	assert.ok(texts.some((text) => text.includes("可添加指标")));
+	const checkboxes = nodesWhere(tree, (node) => node.type === "input" && node.props.type === "checkbox");
+	assert.equal(checkboxes.length, 2);
+});
+
+test("display config card renders its loading shell", () => {
+	const tree = mod.displayConfigCard({ t: tr, store: fakeStore({ plans: [OPENCODE] }) });
+	const texts = textsOf(tree);
+	assert.ok(texts.includes("显示内容"));
+	assert.ok(texts.includes("读取配置…"));
+});
 
 test("footer action renders a labeled ring with the right expanded state", () => {
 	const store = fakeStore({ plans: [OPENCODE], status: "ok" });

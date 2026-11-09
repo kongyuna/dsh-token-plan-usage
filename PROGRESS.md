@@ -1,22 +1,26 @@
 # PROGRESS
 
-目标：让 `dsh-token-plan-usage` 在 DSH 侧栏账号行右侧显示用量环，点开看到 OpenCode Go / 小米 / DeepSeek 三个 plan；环与卡片显示**剩余**百分比，插件与 `dsh-opencode-go-plus` 完全独立。
-顺序：先核对基线 → 用截图/点击证明按钮与卡片 → 修剩余口径与解耦 → 全量测试 → push/tag。
-最大风险：账号行/overlay 结构变化、以及 macOS 辅助访问限制导致无法自动点击。
+目标：让 `dsh-token-plan-usage` 在 DSH 侧栏显示一个套餐的用量环，点开卡片显示用户勾选的多个套餐；插件详情页提供可视化配置（多选套餐、每套餐指标顺序、圆环单选套餐）；环与卡片显示**剩余**；插件与 `dsh-opencode-go-plus` 完全独立。
+顺序：基线核对 → 环/卡片真机可见 → 剩余口径与解耦 → provider 范围过滤 → 详情页可视化配置（多套餐 + 单环）→ 全量测试 → push/tag。
+最大风险：账号行/overlay 结构变化、macOS 辅助访问限制、DSH 窗口被关闭导致配置页无法截图。
 
 ## 状态
 
-- [x] 基线：`node --test` 117 → 现在 118 pass / 0 fail / 0 skipped；`node --check lib/*.js` 通过。
-- [x] 环：已确认在账号行右侧；截图像素测量环中心 y=786.5，头像中心 y=786.0（差 0.5px）。
-- [x] 卡片：已通过 CoreGraphics 点击真实页面打开；截图显示三个 plan 与「剩余 96% / 99% / 89%」；卡片从环上方浮出（锚点 bug 已修）。
-- [x] 口径：UI 从「已用」改为「剩余」；宿主仍保留上游 `usedPercent`，客户端换算 100−used；环取各窗口**最小剩余**。
-- [x] 范围：只显示 `ctx.llm.listProviders()` 里已注册 provider 的 plan（当前实测 providers=`deepseek-official`/`deepseek-account`/`opencode-go`；小米无 provider，已隐藏）。
+- [x] 基线：`node --test` 117 → 目前 127 pass / 0 fail / 0 skipped；`node --check lib/*.js` 通过。
+- [x] 环：在账号行右侧；截图像素测量环中心 y=786.5，头像中心 y=786.0（差 0.5px）。
+- [x] 卡片：已通过 CoreGraphics 点击真实页面打开；卡片从环上方浮出（锚点 bug 已修）。
+- [x] 口径：UI 显示「剩余」；宿主保留上游 `usedPercent`，客户端换算 100−used。
+- [x] 范围：只显示 `ctx.llm.listProviders()` 里已注册 provider 的套餐（当前实测 `deepseek-official`/`deepseek-account`/`opencode-go`；小米无 provider，已隐藏）。
 - [x] 解耦：删除读取 `dsh-opencode-go-plus` settings 的 `settingsValue` / `openCodeOverrides`；OpenCode Go 的 baseURL/credentialRef 只来自本插件配置/默认值。
-- [x] 回归测试：按用户新要求更新客户端断言；新增 provider 范围、剩余渲染、点击锚点测试；净 121 pass / 0 fail / 0 skipped。
-- [x] push 到 `kongyuna/dsh-token-plan-usage`，打 v0.1.2 tag（本次提交）。
-- [x] 窄窗：DSH 最小窗宽 520px（390 做不到）；520px 下卡片 300px 宽、无横向溢出，见 `artifacts/usage-card-narrow.png`。
+- [x] 多套餐配置：详情页可多选套餐；每个套餐可单独选/排序指标；卡片按勾选显示多个套餐；圆环只显示其中一个套餐。
+- [x] 配置持久化：`~/.dsh/dsh-token-plan-usage.json`（非敏感、无需重启）；GET/POST `/dsh-token-plan-usage/config` 实测成功。
+- [x] 环顺序：圆环上弧=圆环套餐第 1 个指标，下弧=第 2 个；卡片按保存顺序；`summarize(plans, iconPlanId)` 有单测。
+- [x] 回归测试：127 pass / 0 fail / 0 skipped；覆盖剩余、provider 范围、多套餐配置读写、配置卡片渲染、环锚点。
+- [x] 窄窗：DSH 最小窗宽 520px（390 做不到）；520px 下卡片 300px 宽、无横向溢出。
 - [x] 解耦核对：`lib/`、`test/` 中已无 `dsh-opencode-go-plus` 的功能引用（只剩 MIT 署名）。
+- [ ] push 到 `kongyuna/dsh-token-plan-usage`，打 v0.2.0 tag。
 
 ## 说明
 
-- 2026-11-09 DSH 曾中途重启（端口/进程变化），期间两次调试器工具调用结果未知；已改为截图 + 真实鼠标事件验证，不依赖重启中的调试器。
+- 2026-11-09 DSH 曾中途重启；当前 DSH 窗口被关闭，无法截图插件详情页配置卡片。配置路由、配置卡片渲染与多套餐/环单选逻辑已有测试与 curl 证据，配置页外观仍需用户打开确认。
+- 配置接口实测：selected `{plans:[opencode-go: rolling+monthly, deepseek: balance], iconPlanId:"opencode-go"}`，`/usage` 返回两个套餐且窗口顺序正确。

@@ -34,15 +34,17 @@ test("host plugin exports its name and required service", () => {
 	assert.equal(typeof Config, "function");
 });
 
-test("apply registers the usage route and the cookie route", () => {
+test("apply registers the usage, display-config and cookie routes", () => {
 	const { ctx, routes } = fakeContext();
 	apply(ctx, {});
-	assert.equal(routes.length, 2);
+	assert.equal(routes.length, 3);
 	const byPath = Object.fromEntries(routes.map((route) => [route.path, route]));
 	assert.equal(byPath["/dsh-token-plan-usage/usage"].kind, "exact");
+	assert.equal(byPath["/dsh-token-plan-usage/config"].kind, "exact");
 	assert.equal(byPath["/dsh-token-plan-usage/xiaomi-cookie"].kind, "exact");
-	assert.equal(typeof byPath["/dsh-token-plan-usage/usage"].handler, "function");
-	assert.equal(typeof byPath["/dsh-token-plan-usage/xiaomi-cookie"].handler, "function");
+	for (const path of ["/dsh-token-plan-usage/usage", "/dsh-token-plan-usage/config", "/dsh-token-plan-usage/xiaomi-cookie"]) {
+		assert.equal(typeof byPath[path].handler, "function", path);
+	}
 });
 
 test("apply rejects an invalid config before registering anything", () => {

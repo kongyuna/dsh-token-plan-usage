@@ -54,6 +54,21 @@ Settings → Models first, then set the console cookie.
 `OPENCODE_GO_API_KEY` is only a DSH credential-reference name; rename it with
 `credentialRef` if you want full separation from any other OpenCode plugin.
 
+### Display settings on the plugin detail page
+
+Open Settings → Plugins → `Token Plan Usage`. The bundle page lets you:
+
+- check any number of plans to show in the card; options come only from services
+  registered in DSH models;
+- per plan, pick and order 1–3 metrics. For OpenCode Go you can show only 5-hour,
+  only weekly, or 5-hour + monthly / monthly + 5-hour;
+- pick **one** of the checked plans for the sidebar ring; its top arc is metric 1
+  and its bottom arc is metric 2. Xiaomi exposes plan total/balance; DeepSeek
+  exposes balance.
+- the whole form is checkboxes, buttons and a dropdown — no YAML/JSON or API
+  names to type. Save without touching the profile; the preference is stored in
+  `~/.dsh/dsh-token-plan-usage.json` (non-secret, no restart).
+
 The plugin does not read other plugins' settings. OpenCode Go's gateway URL and
 credential ref come from this plugin's own `plans`; for a local relay, set
 `baseURL` explicitly. A plan can be added or overridden in the profile patch:
