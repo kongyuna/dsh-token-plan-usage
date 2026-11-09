@@ -12,7 +12,7 @@
 - [x] 口径：UI 从「已用」改为「剩余」；宿主仍保留上游 `usedPercent`，客户端换算 100−used；环取各窗口**最小剩余**。
 - [x] 解耦：删除读取 `dsh-opencode-go-plus` settings 的 `settingsValue` / `openCodeOverrides`；OpenCode Go 的 baseURL/credentialRef 只来自本插件配置/默认值。
 - [x] 回归测试：按用户新要求（剩余口径、完全解耦）更新客户端断言，删除 2 个只测旧 settings 复用的测试，新增 2 个测试（点击锚点 bottom offset、剩余渲染 + 最小剩余聚合）；净 118 pass / 0 fail / 0 skipped。
-- [x] push 到 `kongyuna/dsh-token-plan-usage`，打 v0.1.1 tag（dfbbffa）。
+- [x] push 到 `kongyuna/dsh-token-plan-usage`，打 v0.1.1 tag（331e4ac）。
 - [x] 窄窗：DSH 最小窗宽 520px（390 做不到）；520px 下卡片 300px 宽、无横向溢出，见 `artifacts/usage-card-narrow.png`。
 - [x] 解耦核对：`lib/`、`test/` 中已无 `dsh-opencode-go-plus` 的功能引用（只剩 MIT 署名）。
 
