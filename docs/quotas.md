@@ -1,6 +1,6 @@
 # 用量口径与上游契约
 
-这份文档记录 v0.1.1 三个 plan 的数据来源、字段含义和归一化规则。上游都是非公开或半公开接口，
+这份文档记录 v0.1.2 三个 plan 的数据来源、字段含义和归一化规则。上游都是非公开或半公开接口，
 可能随服务方改动；插件对字段采取「坏字段丢弃、不坏整份」的策略，并在 UI 里保留原始 `status`。
 
 ## 1. OpenCode Go
@@ -76,6 +76,7 @@ authorization: Bearer <DEEPSEEK_API_KEY>
 
 ## 4. UI 归一化
 
+- 显示范围：只展示 `ctx.llm.listProviders()` 里已有 provider 对应的 plan；provider 不存在时即使凭据存在也不显示（例：当前 DSH 没有小米 provider，就不显示小米）。
 - 宿主返回的 `usedPercent` 是上游的**已用**比例并 clamp 到 0..100；客户端显示**剩余** = 100 − 已用，宿主不改口径。
 - 环：上弧 = 所有 plan 的短窗（`rolling`/`5h`/`session`）里**最小剩余**；下弧 = 长窗（`weekly`/`monthly`）里**最小剩余**；
   弧长 = 剩余。某窗口 `rate-limited`/`expired`/已用 ≥100% 时整环灰显。

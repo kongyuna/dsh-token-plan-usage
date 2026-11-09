@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { Config, planDescriptors } from "../lib/config.js";
-import { buildPlanView, createCookieHandler, createUsageHandler, resolveCredential } from "../lib/index.js";
+import { buildPlanView, createCookieHandler, createUsageHandler, planInScope, resolveCredential } from "../lib/index.js";
 import { UsageCache } from "../lib/usage.js";
 
 // ── fixtures ──────────────────────────────────────────────────────────────
@@ -187,6 +187,54 @@ test("usage route keeps the previous reading when a plan later fails", async () 
 	const opencode = second.body.plans.find((plan) => plan.id === "opencode-go");
 	assert.equal(opencode.status, "auth");
 	assert.equal(opencode.last.windows.length, 3);
+});
+
+test("planInScope matches provider route families and keeps unknown routes", () => {
+	assert.equal(planInScope({ kind: "opencode-go" }, ["opencode-go"]), true);
+	assert.equal(planInScope({ kind: "opencode-go" }, ["opencode-go-plus"]), true);
+	assert.equal(planInScope({ kind: "opencode-go" }, ["deepseek-official"]), false);
+	assert.equal(planInScope({ kind: "xiaomi-console" }, ["xiaomi-token-plan-cn"]), true);
+	assert.equal(planInScope({ kind: "xiaomi-console" }, ["opencode-go"]), false);
+	assert.equal(planInScope({ kind: "deepseek-balance" }, ["deepseek-official"]), true);
+	assert.equal(planInScope({ kind: "deepseek-balance" }, []), false);
+	assert.equal(planInScope({ kind: "opencode-go" }, undefined), true);
+});
+
+test("usage route only shows plans whose provider is registered", async () => {
+	const fetchImpl = router({
+		"/zen/go/v1/usage": { value: OPENCODE_USAGE },
+		"/user/balance": { value: DEEPSEEK_BALANCE }
+	});
+	const credentials = {
+		OPENCODE_GO_API_KEY: "sk-open",
+		DEEPSEEK_API_KEY: "sk-deep",
+		XIAOMI_TOKEN_PLAN_COOKIE: COOKIE
+	};
+	const handler = createUsageHandler({
+		plans: plansFor(),
+		cache: new UsageCache({ ttlMs: 0 }),
+		resolveCredential: async (ref) => credentials[ref],
+		listProviders: () => ["opencode-go", "deepseek-official"],
+		deps: { fetchImpl, now: () => 1 }
+	});
+	const res = fakeRes();
+	await handler(fakeRequest(), res);
+	assert.deepEqual(res.body.plans.map((plan) => plan.id), ["opencode-go", "deepseek"]);
+	assert.deepEqual(res.body.providers, ["opencode-go", "deepseek-official"]);
+	assert.equal(fetchImpl.calls.some((call) => call.url.includes("mimo")), false);
+});
+
+test("usage route hides every plan when no provider is registered", async () => {
+	const handler = createUsageHandler({
+		plans: plansFor(),
+		cache: new UsageCache(),
+		resolveCredential: async () => "unused",
+		listProviders: () => []
+	});
+	const res = fakeRes();
+	await handler(fakeRequest(), res);
+	assert.equal(res.body.reason, "no-active-plans");
+	assert.deepEqual(res.body.plans, []);
 });
 
 test("usage route reports no plans explicitly", async () => {

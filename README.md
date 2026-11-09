@@ -9,7 +9,7 @@
 
 - 不注册 LLM 适配器，不发聊天请求，不改 `llm-pi-ai`，也不读、不写 `dsh-opencode-go-plus` 的任何配置或 settings。
 - 与 `dsh-opencode-go-plus` **完全独立**：可以同时安装，也可以不装；OpenCode Go 的 `baseURL`、`credentialRef` 都由本插件自己的配置决定。
-- v1 支持：**OpenCode Go**、**小米 MiMo Token Plan**、**DeepSeek 余额**。
+- v1 支持：**OpenCode Go**、**小米 MiMo Token Plan**、**DeepSeek 余额**；但只在对应 provider 已注册到 DSH 模型时显示，不按凭据硬凑。
 
 > 口径提醒：面板里的百分比是**剩余**；圆环弧长同样表示**剩余**。0% 为空环（用完），100% 为满环（全新）。
 
@@ -63,6 +63,15 @@ dsh plugin --profile web add "/absolute/path/to/dsh-token-plan-usage"
 | OpenCode Go | `OPENCODE_GO_API_KEY` | `GET {baseURL}/v1/usage` |
 | 小米 MiMo Token Plan | `XIAOMI_TOKEN_PLAN_COOKIE`（Cookie） | `GET https://platform.xiaomimimo.com/api/v1/balance`、`/tokenPlan/detail`、`/tokenPlan/usage` |
 | DeepSeek | `DEEPSEEK_API_KEY` | `GET https://api.deepseek.com/user/balance` |
+
+> **显示范围只看 DSH 模型里已有的 provider，不按凭据猜。** 例如当前 DSH 没有配置小米 provider
+> （`xiaomi-token-plan-*` / `xiaomi`），即使 credentials 里有 `XIAOMI_TOKEN_PLAN_CN_API_KEY`，小米区块也不会显示。
+> 判断来源是 DSH 的 `llm.listProviders()`：
+> - OpenCode Go：`opencode-go` / `opencode-go-plus`；
+> - 小米：`xiaomi` / `xiaomi-token-plan-*`；
+> - DeepSeek：`deepseek-official` / `deepseek-account` / `deepseek`。
+> 某 plan 的 provider 已注册、但凭据没配时，才会显示「未配置凭据」。想显示小米，先在
+> 设置 → 模型里启用小米 provider，再在卡片里设置控制台 Cookie。
 
 ### OpenCode Go 独立配置
 
