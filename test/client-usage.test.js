@@ -146,7 +146,7 @@ const DEEPSEEK = {
 test("client exports the slot and locale requirements plus both dictionaries", () => {
 	assert.deepEqual(mod.inject, ["slots", "locale"]);
 	assert.equal(typeof mod.apply, "function");
-	for (const key of ["title", "noPlans", "noCookie", "setupCookie", "balance", "credits"]) {
+	for (const key of ["title", "noPlans", "noCookie", "setupCookie", "balance", "credits", "signedOut", "accountError", "apiKeyHint", "accountSignInHint"]) {
 		assert.equal(typeof mod.dictionaries.zh[key], "string");
 		assert.equal(typeof mod.dictionaries.en[key], "string");
 	}
@@ -301,8 +301,19 @@ test("statusText localizes every known failure", () => {
 	const { statusText } = mod.usageFormat;
 	assert.equal(statusText({ status: "auth" }, tr), "凭据无效");
 	assert.equal(statusText({ status: "no-cookie" }, tr), "需要控制台 Cookie");
+	assert.equal(statusText({ status: "signed-out" }, tr), "未登录 DeepSeek 账号");
+	assert.equal(statusText({ status: "account-error" }, trEn), "Account balance unavailable");
 	assert.equal(statusText({ status: "ok" }, tr), null);
 	assert.equal(statusText({ status: "shape" }, trEn), "Unrecognized response");
+});
+
+test("plan section explains how to fix a failing DeepSeek card", () => {
+	const authTree = mod.planSection({ plan: { ...DEEPSEEK, status: "auth", windows: [] }, t: tr, localeTag: "zh-CN", store: fakeStore(), first: true });
+	assert.ok(textsOf(authTree).includes("在 设置 → 模型 → DeepSeek 检查 API Key 后刷新。"));
+	const signedOutTree = mod.planSection({ plan: { ...DEEPSEEK, status: "signed-out", windows: [] }, t: tr, localeTag: "zh-CN", store: fakeStore(), first: true });
+	const texts = textsOf(signedOutTree);
+	assert.ok(texts.includes("未登录 DeepSeek 账号"));
+	assert.ok(texts.includes("在 设置 → 账号 登录 DeepSeek 后刷新。"));
 });
 
 // ── rendered footer ───────────────────────────────────────────────────────

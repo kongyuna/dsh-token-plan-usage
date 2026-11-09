@@ -61,7 +61,7 @@ dsh plugin --profile web add "/absolute/path/to/dsh-token-plan-usage"
 |---|---|---|
 | OpenCode Go | `OPENCODE_GO_API_KEY` | `GET {baseURL}/v1/usage` |
 | 小米 MiMo Token Plan | `XIAOMI_TOKEN_PLAN_COOKIE`（Cookie） | `GET https://platform.xiaomimimo.com/api/v1/balance`、`/tokenPlan/detail`、`/tokenPlan/usage` |
-| DeepSeek | `DEEPSEEK_API_KEY` | `GET https://api.deepseek.com/user/balance` |
+| DeepSeek | `DEEPSEEK_API_KEY`（账号登录时可不配） | 优先 DSH 账号钱包 `deepseekAccount.getBalance`；回退 `GET https://api.deepseek.com/user/balance` |
 
 > **显示范围只看 DSH 模型里已有的 provider，不按凭据猜。** 例如当前 DSH 没有配置小米 provider
 > （`xiaomi-token-plan-*` / `xiaomi`），即使 credentials 里有 `XIAOMI_TOKEN_PLAN_CN_API_KEY`，小米区块也不会显示。
@@ -71,6 +71,12 @@ dsh plugin --profile web add "/absolute/path/to/dsh-token-plan-usage"
 > - DeepSeek：`deepseek-official` / `deepseek-account` / `deepseek`。
 > 某 plan 的 provider 已注册、但凭据没配时，才会显示「未配置凭据」。想显示小米，先在
 > 设置 → 模型里启用小米 provider，再在卡片里设置控制台 Cookie。
+
+DeepSeek 余额优先走 **DSH 已登录的账号钱包**（`ctx.get("deepseekAccount").getBalance`，不需要 API Key）：
+账号已登录时不会请求 API Key；账号未登录、读取失败或宿主没有账号服务时，才回退到
+`DEEPSEEK_API_KEY` 的 `GET /user/balance`。两者都只提供余额金额（官方 API 没有 usage/quota 接口）。
+失败状态：`signed-out`（未登录账号）、`account-error`（账号读取失败）；卡片会给出「登录账号」
+或「检查 API Key」的提示。
 
 ### 插件详情页的「显示内容」
 
@@ -166,6 +172,9 @@ plans:
 | 卡片显示「没有可显示的 token plan」 | 没配到任何凭据，或 `includeDefaults: false` 且 `plans` 为空 | 配置凭据，或在 `plans` 里显式添加 |
 | OpenCode 显示「未配置凭据」 | `OPENCODE_GO_API_KEY` 不存在 | 在 DSH 凭据里配置；或改 `credentialRef` |
 | OpenCode 显示「凭据无效」 | 网关 401/403 | 去 Console 重新复制 Key；确认订阅有效 |
+| DeepSeek 显示「未登录 DeepSeek 账号」 | DSH 没有已登录的 DeepSeek 账号，且没有可用 API Key | 在 设置 → 账号 登录 DeepSeek，或配置 `DEEPSEEK_API_KEY` |
+| DeepSeek 显示「账号余额读取失败」 | 账号钱包接口失败（网络/平台异常） | 稍后刷新；卡片会保留上一次成功读数 |
+| DeepSeek 显示「凭据无效」 | 账号不可用，且 `DEEPSEEK_API_KEY` 被 401/403 拒绝 | 在 设置 → 模型 → DeepSeek 检查 API Key |
 | 小米显示「需要控制台 Cookie」 | 只有 `XIAOMI_TOKEN_PLAN_CN_API_KEY` | 按上文在卡片里设置 Cookie |
 | 小米显示「Cookie 格式不识别」 | 缺 `api-platform_serviceToken` 或 `userId` | 重新复制完整 Cookie 头 |
 | 全部显示「网络错误 / 请求超时」 | 本机到上游不可达 | 检查网络/代理；OpenCode 可把 `baseURL` 指到本地 relay |
@@ -185,7 +194,7 @@ plans:
 
 ## 兼容性
 
-- 基线：DSH **0.2.1-rc.5**（桌面版），Node ≥ 22.19.0。
+- 基线：DSH **0.2.2-rc.1**（桌面版），Node ≥ 22.19.0。
 - `engines.dsh`: `>=0.2.1-rc.2 <0.3.0-0`；依赖官方 slot `shell.overlay` 与对账号行的几何测量。
 - 不依赖任何 `@deepseek-ai/*` npm 包，不引入 pi-ai。
 - 客户端通过 DSH 的 module-loader 加载；无 React 运行时复制、无 DOM 注入、无 `<style>` 注入。
@@ -199,7 +208,7 @@ node --check lib/*.js
 node --test
 ```
 
-测试覆盖：三个上游的解析与探针、缓存 TTL/单飞/last-good、配置校验、用量路由、Cookie 保存路由、
+测试覆盖：三个上游的解析与探针（含 DeepSeek 账号钱包与 API Key 兜底优先级）、缓存 TTL/单飞/last-good、配置校验、用量路由、Cookie 保存路由、
 客户端格式化与渲染（module-loader shim）、打包元数据。当前不依赖网络，全部使用注入的 fake fetch。
 
 目录：

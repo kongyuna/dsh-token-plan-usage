@@ -55,6 +55,33 @@ DSH credentials 的 `XIAOMI_TOKEN_PLAN_COOKIE`；失败不落盘。
 
 ## 3. DeepSeek
 
+DeepSeek 条目按「账号钱包优先、API Key 兜底」取数。两者都只提供余额金额，没有已用百分比。
+
+### 3.1 DSH 账号钱包（优先）
+
+宿主侧调用 `ctx.get("deepseekAccount").getBalance(client)`；账号 provider 用存好的 grant 请求
+`{platformOrigin}/api/v0/users/get_user_summary`（`x-dsh-auth-token`）。`client` 是该调用方的
+`AccountClientMetadata`：`{ version, locale, timezoneOffsetSeconds }`，其中 version 取 DSH 构建版本
+（`profileContext.installAnchor` 的 package.json），locale 取宿主 Intl，时区为东为正的整秒。
+
+返回形状：
+
+```json
+{
+  "status": "ready",
+  "value": [{ "currency": "CNY", "balance": "100.00" }],
+  "bonusWallets": [{ "currency": "CNY", "balance": "10.00" }]
+}
+```
+
+- `value` = 充值余额（normal_wallets），`bonusWallets` = 赠金（bonus_wallets）；均为十进制字符串。
+- 一个币种一行：`amount = 充值 + 赠金`，`granted = 赠金`，`toppedUp = 充值`；按 CNY、USD 排序。
+- `getBalance` 返回 `null` → 未登录（`signed-out`）；`{ "status": "failed" }` 或抛错 → `account-error`；
+  宿主没有账号服务 → `no-account`（无 API Key 时对外表现为 `no-key`）。
+- 账号余额成功时不再请求 API Key，避免无意义的 401。
+
+### 3.2 API Key 余额（兜底）
+
 ```http
 GET {baseURL}/user/balance
 authorization: Bearer <DEEPSEEK_API_KEY>
@@ -73,6 +100,8 @@ authorization: Bearer <DEEPSEEK_API_KEY>
 
 - 一种币种一行，按 CNY、USD 排序；余额金额不是百分比。
 - `is_available: false` → 该 plan 状态 `unavailable`。
+- 官方 API 只有余额接口（没有 usage/quota 接口），所以 API Key 侧只能显示金额。
+- 401/403 → `auth`。只有账号侧不可用（未登录/失败/服务缺失）时才走到这里。
 
 ## 4. UI 归一化
 

@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 
 import { Config, planDescriptors } from "../lib/config.js";
-import { buildPlanView, createConfigHandler, createCookieHandler, createUsageHandler, planInScope, resolveCredential } from "../lib/index.js";
+import { buildPlanView, createConfigHandler, createCookieHandler, createUsageHandler, planInScope, resolveAccountClient, resolveCredential } from "../lib/index.js";
 import { UsageCache } from "../lib/usage.js";
 
 // ── fixtures ──────────────────────────────────────────────────────────────
@@ -18,6 +21,26 @@ const DEEPSEEK_BALANCE = {
 	is_available: true,
 	balance_infos: [{ currency: "CNY", total_balance: "110.00", granted_balance: "10.00", topped_up_balance: "100.00" }]
 };
+const ACCOUNT_BALANCE = {
+	status: "ready",
+	value: [
+		{ currency: "CNY", balance: "100.00" },
+		{ currency: "USD", balance: "2.00" }
+	],
+	bonusWallets: [{ currency: "CNY", balance: "10.00" }]
+};
+const ACCOUNT_CLIENT = { version: "0.2.2-rc.1", locale: "zh-CN", timezoneOffsetSeconds: 28800 };
+
+function fakeAccount(result) {
+	const calls = [];
+	return {
+		calls,
+		async getBalance(client) {
+			calls.push(client);
+			return typeof result === "function" ? result() : result;
+		}
+	};
+}
 const XIAOMI_BALANCE = { code: 0, data: { balance: "12.50", currency: "CNY", cashBalance: "10.00", giftBalance: "2.50" } };
 const XIAOMI_DETAIL = { code: 0, data: { planCode: "pro", currentPeriodEnd: "2026-12-03 13:15:46", expired: false } };
 const XIAOMI_USAGE = { code: 0, data: { monthUsage: { percent: 0.42, items: [{ name: "Pro", used: 42, limit: 100, percent: 0.42 }] } } };
@@ -137,6 +160,103 @@ test("usage route can select the DeepSeek balance plan", async () => {
 	assert.equal(res.body.plans.length, 1);
 	assert.equal(res.body.plans[0].id, "deepseek");
 	assert.deepEqual(res.body.plans[0].windows, [{ key: "balance", kind: "amount", amount: 110, currency: "CNY", granted: 10, toppedUp: 100 }]);
+});
+
+test("usage route prefers the signed-in DeepSeek account and skips the API key", async () => {
+	const account = fakeAccount(ACCOUNT_BALANCE);
+	const handler = createUsageHandler({
+		plans: plansFor(),
+		cache: new UsageCache({ ttlMs: 0 }),
+		resolveCredential: async () => undefined,
+		listProviders: () => ["opencode-go", "deepseek-official", "deepseek-account"],
+		getAccount: () => account,
+		accountClient: ACCOUNT_CLIENT,
+		readDisplay: () => ({ planId: "deepseek", windows: ["balance"] }),
+		deps: {
+			fetchImpl: async () => {
+				throw new Error("the API key must not be probed while the account answers");
+			},
+			now: () => 11
+		}
+	});
+	const res = fakeRes();
+	await handler(fakeRequest(), res);
+	assert.equal(res.body.plans.length, 1);
+	const view = res.body.plans[0];
+	assert.equal(view.id, "deepseek");
+	assert.equal(view.status, "ok");
+	assert.deepEqual(view.windows, [
+		{ key: "balance", kind: "amount", amount: 110, currency: "CNY", toppedUp: 100, granted: 10 },
+		{ key: "balance-usd", kind: "amount", amount: 2, currency: "USD", toppedUp: 2 }
+	]);
+	assert.equal(account.calls[0], ACCOUNT_CLIENT);
+	assert.ok(!JSON.stringify(res.body).includes("sk-"));
+});
+
+test("usage route falls back to the API key when the account is signed out", async () => {
+	const fetchImpl = router({ "/user/balance": { value: DEEPSEEK_BALANCE } });
+	const handler = createUsageHandler({
+		plans: plansFor(),
+		cache: new UsageCache({ ttlMs: 0 }),
+		resolveCredential: async (ref) => (ref === "DEEPSEEK_API_KEY" ? "sk-deep" : undefined),
+		listProviders: () => ["deepseek-official", "deepseek-account"],
+		getAccount: () => fakeAccount(null),
+		accountClient: ACCOUNT_CLIENT,
+		readDisplay: () => ({ planId: "deepseek", windows: ["balance"] }),
+		deps: { fetchImpl, now: () => 12 }
+	});
+	const res = fakeRes();
+	await handler(fakeRequest(), res);
+	assert.equal(res.body.plans[0].status, "ok");
+	assert.equal(res.body.plans[0].windows[0].amount, 110);
+});
+
+test("usage route reports a signed-out DeepSeek account when no source works", async () => {
+	const handler = createUsageHandler({
+		plans: plansFor(),
+		cache: new UsageCache({ ttlMs: 0 }),
+		resolveCredential: async () => undefined,
+		listProviders: () => ["deepseek-official", "deepseek-account"],
+		getAccount: () => fakeAccount(null),
+		accountClient: ACCOUNT_CLIENT,
+		readDisplay: () => ({ planId: "deepseek", windows: ["balance"] }),
+		deps: { fetchImpl: async () => jsonResponse({}), now: () => 13 }
+	});
+	const res = fakeRes();
+	await handler(fakeRequest(), res);
+	assert.equal(res.body.plans[0].status, "signed-out");
+});
+
+test("usage route reports the account error when both DeepSeek sources fail", async () => {
+	const fetchImpl = router({ "/user/balance": { status: 401, value: {} } });
+	const handler = createUsageHandler({
+		plans: plansFor(),
+		cache: new UsageCache({ ttlMs: 0 }),
+		resolveCredential: async (ref) => (ref === "DEEPSEEK_API_KEY" ? "sk-deep" : undefined),
+		listProviders: () => ["deepseek-official", "deepseek-account"],
+		getAccount: () => fakeAccount({ status: "failed" }),
+		accountClient: ACCOUNT_CLIENT,
+		readDisplay: () => ({ planId: "deepseek", windows: ["balance"] }),
+		deps: { fetchImpl, now: () => 14 }
+	});
+	const res = fakeRes();
+	await handler(fakeRequest(), res);
+	assert.equal(res.body.plans[0].status, "account-error");
+});
+
+test("usage route keeps the API key path when the account service is absent", async () => {
+	const fetchImpl = router({ "/user/balance": { value: DEEPSEEK_BALANCE } });
+	const handler = createUsageHandler({
+		plans: plansFor(),
+		cache: new UsageCache({ ttlMs: 0 }),
+		resolveCredential: async (ref) => (ref === "DEEPSEEK_API_KEY" ? "sk-deep" : undefined),
+		listProviders: () => ["deepseek-official"],
+		readDisplay: () => ({ planId: "deepseek", windows: ["balance"] }),
+		deps: { fetchImpl, now: () => 15 }
+	});
+	const res = fakeRes();
+	await handler(fakeRequest(), res);
+	assert.equal(res.body.plans[0].status, "ok");
 });
 
 test("usage route turns a missing selected credential into no-key without probing", async () => {
@@ -518,4 +638,24 @@ test("resolveCredential prefers the credentials service and falls back to env", 
 	};
 	assert.equal(await resolveCredential(ctx, "A_KEY"), "from-store");
 	assert.equal(await resolveCredential(ctx, "MISSING_KEY"), undefined);
+});
+
+test("resolveAccountClient reads the host version from the profile install anchor", () => {
+	const dir = mkdtempSync(join(tmpdir(), "dsh-tpu-account-"));
+	try {
+		const anchor = join(dir, "package.json");
+		writeFileSync(anchor, JSON.stringify({ name: "@deepseek-ai/dsh", version: "0.2.2-rc.1" }));
+		const client = resolveAccountClient({
+			get(name) {
+				return name === "profileContext" ? { installAnchor: anchor } : undefined;
+			}
+		});
+		assert.equal(client.version, "0.2.2-rc.1");
+		assert.equal(typeof client.locale, "string");
+		assert.ok(client.locale.length > 0);
+		assert.equal(client.timezoneOffsetSeconds, -new Date().getTimezoneOffset() * 60);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+	assert.equal(resolveAccountClient({}).version, "0.0.0");
 });

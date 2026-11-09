@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
 	normalizeXiaomiCookie,
+	parseDeepSeekAccountWallets,
 	parseDeepSeekBalance,
 	parseOpenCodeUsage,
 	parseXiaomiBalance,
@@ -10,6 +11,8 @@ import {
 	parseXiaomiPlanDetail,
 	parseXiaomiPlanUsage,
 	probeDeepSeek,
+	probeDeepSeekAccount,
+	probeDeepSeekBalance,
 	probeOpenCode,
 	probePlan,
 	probeXiaomi
@@ -330,4 +333,170 @@ test("probePlan dispatches by kind", async () => {
 	});
 	assert.equal(unknown.ok, false);
 	assert.equal(unknown.code, "shape");
+});
+
+// ── DeepSeek account balance ─────────────────────────────────────────────
+
+const ACCOUNT_WALLETS = {
+	status: "ready",
+	value: [
+		{ currency: "CNY", balance: "100.00" },
+		{ currency: "USD", balance: "1.5" }
+	],
+	bonusWallets: [{ currency: "CNY", balance: "10.00" }]
+};
+
+const ACCOUNT_CLIENT = { version: "0.2.2-rc.1", locale: "zh-CN", timezoneOffsetSeconds: 28800 };
+
+function accountService(result) {
+	const calls = [];
+	return {
+		calls,
+		async getBalance(client) {
+			calls.push(client);
+			return typeof result === "function" ? result() : result;
+		}
+	};
+}
+
+test("parseDeepSeekAccountWallets sums topped-up and granted wallets per currency", () => {
+	const windows = parseDeepSeekAccountWallets(ACCOUNT_WALLETS);
+	assert.deepEqual(windows, [
+		{ key: "balance", kind: "amount", amount: 110, currency: "CNY", toppedUp: 100, granted: 10 },
+		{ key: "balance-usd", kind: "amount", amount: 1.5, currency: "USD", toppedUp: 1.5 }
+	]);
+});
+
+test("parseDeepSeekAccountWallets keeps a bonus-only currency and drops bad rows", () => {
+	const windows = parseDeepSeekAccountWallets({
+		status: "ready",
+		value: [{ currency: "CNY", balance: "not-a-number" }],
+		bonusWallets: [
+			{ currency: "USD", balance: "0E-16" },
+			{ currency: "CNY", balance: "-1" }
+		]
+	});
+	assert.deepEqual(windows, [{ key: "balance", kind: "amount", amount: 0, currency: "USD" }]);
+});
+
+test("parseDeepSeekAccountWallets rejects an empty wallet set", () => {
+	assert.equal(parseDeepSeekAccountWallets({ status: "ready", value: [], bonusWallets: [] }), undefined);
+	assert.equal(parseDeepSeekAccountWallets(null), undefined);
+	assert.equal(parseDeepSeekAccountWallets("nope"), undefined);
+});
+
+test("probeDeepSeekAccount maps ready wallets and forwards the client metadata", async () => {
+	const account = accountService(ACCOUNT_WALLETS);
+	const result = await probeDeepSeekAccount({ account, client: ACCOUNT_CLIENT, deps: { now: () => 42 } });
+	assert.equal(result.ok, true);
+	assert.equal(result.fetchedAt, 42);
+	assert.deepEqual(result.windows.map((window) => window.currency), ["CNY", "USD"]);
+	assert.equal(account.calls[0], ACCOUNT_CLIENT);
+});
+
+test("probeDeepSeekAccount reports a signed-out account", async () => {
+	const result = await probeDeepSeekAccount({ account: accountService(null), client: ACCOUNT_CLIENT });
+	assert.equal(result.ok, false);
+	assert.equal(result.code, "signed-out");
+});
+
+test("probeDeepSeekAccount reports a failed Platform read", async () => {
+	const result = await probeDeepSeekAccount({ account: accountService({ status: "failed" }) });
+	assert.equal(result.code, "account-error");
+});
+
+test("probeDeepSeekAccount redacts a thrown service error", async () => {
+	const account = {
+		async getBalance() {
+			throw new Error("Bearer sk-secret rejected");
+		}
+	};
+	const result = await probeDeepSeekAccount({ account });
+	assert.equal(result.code, "account-error");
+	assert.ok(!result.error.includes("sk-secret"));
+});
+
+test("probeDeepSeekAccount reports no-account without a service", async () => {
+	assert.equal((await probeDeepSeekAccount({})).code, "no-account");
+	assert.equal((await probeDeepSeekAccount({ account: {} })).code, "no-account");
+});
+
+test("probeDeepSeekAccount bounds a hanging account call", async () => {
+	const account = { getBalance: () => new Promise(() => {}) };
+	const result = await probeDeepSeekAccount({ account, deps: { timeoutMs: 20 } });
+	assert.equal(result.code, "timeout");
+});
+
+test("probeDeepSeekBalance prefers the account and never calls the API key", async () => {
+	let calls = 0;
+	const result = await probeDeepSeekBalance({
+		account: accountService(ACCOUNT_WALLETS),
+		client: ACCOUNT_CLIENT,
+		apiKey: "sk-deep",
+		baseURL: "https://api.deepseek.example",
+		deps: {
+			fetchImpl: async () => {
+				calls += 1;
+				return jsonResponse(DEEPSEEK_SAMPLE);
+			}
+		}
+	});
+	assert.equal(result.ok, true);
+	assert.equal(result.windows[0].amount, 110);
+	assert.equal(calls, 0);
+});
+
+test("probeDeepSeekBalance falls back to the API key when signed out", async () => {
+	const fetchImpl = router({ "/user/balance": { value: DEEPSEEK_SAMPLE } });
+	const result = await probeDeepSeekBalance({
+		account: accountService(null),
+		apiKey: "sk-deep",
+		baseURL: "https://api.deepseek.example",
+		deps: { fetchImpl }
+	});
+	assert.equal(result.ok, true);
+	assert.equal(result.windows[0].amount, 110);
+	assert.equal(fetchImpl.calls.length, 1);
+});
+
+test("probeDeepSeekBalance reports signed-out when no source answers", async () => {
+	const result = await probeDeepSeekBalance({ account: accountService(null), baseURL: "https://api.deepseek.example" });
+	assert.equal(result.ok, false);
+	assert.equal(result.code, "signed-out");
+});
+
+test("probeDeepSeekBalance prefers the account error when both sources fail", async () => {
+	const fetchImpl = router({ "/user/balance": { status: 401, value: {} } });
+	const result = await probeDeepSeekBalance({
+		account: accountService({ status: "failed" }),
+		apiKey: "sk-deep",
+		baseURL: "https://api.deepseek.example",
+		deps: { fetchImpl }
+	});
+	assert.equal(result.ok, false);
+	assert.equal(result.code, "account-error");
+});
+
+test("probeDeepSeekBalance surfaces the API key error when no account service exists", async () => {
+	const fetchImpl = router({ "/user/balance": { status: 401, value: {} } });
+	const result = await probeDeepSeekBalance({ apiKey: "sk-deep", baseURL: "https://api.deepseek.example", deps: { fetchImpl } });
+	assert.equal(result.code, "auth");
+	const noKey = await probeDeepSeekBalance({ baseURL: "https://api.deepseek.example" });
+	assert.equal(noKey.code, "no-key");
+});
+
+test("probePlan routes deepseek-balance through the account-first probe", async () => {
+	const result = await probePlan({
+		plan: { id: "deepseek", kind: "deepseek-balance", label: "DeepSeek", baseURL: "https://api.deepseek.example" },
+		credential: undefined,
+		account: accountService(ACCOUNT_WALLETS),
+		client: ACCOUNT_CLIENT,
+		deps: {
+			fetchImpl: async () => {
+				throw new Error("the API key must not be probed while the account answers");
+			}
+		}
+	});
+	assert.equal(result.ok, true);
+	assert.equal(result.windows[0].amount, 110);
 });
