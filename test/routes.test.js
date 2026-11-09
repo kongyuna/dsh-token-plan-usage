@@ -110,7 +110,13 @@ test("usage route renders the selected plan with its configured window order", a
 	assert.equal(res.body.plans.length, 1);
 	assert.equal(res.body.plans[0].id, "opencode-go");
 	assert.deepEqual(res.body.plans[0].windows.map((window) => window.key), ["weekly", "rolling"]);
-	assert.deepEqual(res.body.display, { plans: [{ id: "opencode-go", windows: ["weekly", "rolling"] }], iconPlanId: "opencode-go" });
+	assert.deepEqual(res.body.display, {
+		plans: [{ id: "opencode-go", windows: ["weekly", "rolling"] }],
+		ring: [
+			{ planId: "opencode-go", metric: "weekly" },
+			{ planId: "opencode-go", metric: "rolling" }
+		]
+	});
 	assert.ok(!JSON.stringify(res.body).includes("sk-open"));
 	assert.ok(!JSON.stringify(res.body).includes("sk-deep"));
 	assert.ok(!JSON.stringify(res.body).includes(COOKIE));
@@ -216,8 +222,11 @@ test("usage route falls back to the first visible plan when the saved plan leave
 	const res = fakeRes();
 	await handler(fakeRequest(), res);
 	assert.deepEqual(res.body.plans.map((plan) => plan.id), ["opencode-go", "deepseek"]);
-	assert.equal(res.body.display.iconPlanId, "opencode-go");
 	assert.deepEqual(res.body.display.plans[0], { id: "opencode-go", windows: ["rolling", "weekly", "monthly"] });
+	assert.deepEqual(res.body.display.ring, [
+		{ planId: "opencode-go", metric: "rolling" },
+		{ planId: "opencode-go", metric: "weekly" }
+	]);
 });
 
 test("config route lists scoped plans, metrics and the saved selection", async () => {
@@ -235,7 +244,10 @@ test("config route lists scoped plans, metrics and the saved selection", async (
 	assert.deepEqual(res.body.plans.map((plan) => plan.id), ["opencode-go", "deepseek"]);
 	assert.deepEqual(res.body.plans.find((plan) => plan.id === "opencode-go").metrics, ["rolling", "weekly", "monthly"]);
 	assert.deepEqual(res.body.plans.find((plan) => plan.id === "deepseek").metrics, ["balance"]);
-	assert.deepEqual(res.body.selected, { plans: [{ id: "deepseek", windows: ["balance"] }], iconPlanId: "deepseek" });
+	assert.deepEqual(res.body.selected, {
+		plans: [{ id: "deepseek", windows: ["balance"] }],
+		ring: [{ planId: "deepseek", metric: "balance" }]
+	});
 });
 
 test("config route saves a valid ordered metric list", async () => {
@@ -254,8 +266,17 @@ test("config route saves a valid ordered metric list", async () => {
 		headers: { "content-type": "application/json" },
 		body: JSON.stringify({ planId: "opencode-go", windows: ["monthly", "rolling", "monthly", "bogus"] })
 	}), res);
-	assert.deepEqual(res.body, { ok: true, selected: { plans: [{ id: "opencode-go", windows: ["monthly", "rolling"] }], iconPlanId: "opencode-go" } });
-	assert.deepEqual(saved, { plans: [{ id: "opencode-go", windows: ["monthly", "rolling"] }], iconPlanId: "opencode-go" });
+	assert.deepEqual(res.body, {
+		ok: true,
+		selected: {
+			plans: [{ id: "opencode-go", windows: ["monthly", "rolling"] }],
+			ring: [
+				{ planId: "opencode-go", metric: "monthly" },
+				{ planId: "opencode-go", metric: "rolling" }
+			]
+		}
+	});
+	assert.deepEqual(saved, res.body.selected);
 });
 
 test("config route rejects a plan outside the model scope and an empty selection", async () => {
@@ -287,7 +308,7 @@ test("config route rejects a plan outside the model scope and an empty selection
 	assert.deepEqual(saved, []);
 });
 
-test("config route saves multiple plans and a single icon plan", async () => {
+test("config route saves multiple plans and a separate ring selection", async () => {
 	let saved = null;
 	const handler = createConfigHandler({
 		plans: plansFor(),
@@ -306,7 +327,7 @@ test("config route saves multiple plans and a single icon plan", async () => {
 				{ id: "opencode-go", windows: ["monthly", "rolling"] },
 				{ id: "deepseek", windows: ["balance"] }
 			],
-			iconPlanId: "deepseek"
+			ring: [{ planId: "deepseek", metric: "balance" }]
 		})
 	}), res);
 	assert.deepEqual(saved, {
@@ -314,7 +335,7 @@ test("config route saves multiple plans and a single icon plan", async () => {
 			{ id: "opencode-go", windows: ["monthly", "rolling"] },
 			{ id: "deepseek", windows: ["balance"] }
 		],
-		iconPlanId: "deepseek"
+		ring: [{ planId: "deepseek", metric: "balance" }]
 	});
 	assert.deepEqual(res.body.selected, saved);
 });

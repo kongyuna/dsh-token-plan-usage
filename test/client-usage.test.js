@@ -219,14 +219,20 @@ test("summarize falls back when only a monthly window exists", () => {
 	assert.equal(summary.hasPercent, true);
 });
 
-test("summarize uses only the icon plan when the card shows several plans", () => {
+test("summarize follows the independent ring slots across plans", () => {
 	const deepseek = { id: "deepseek", kind: "deepseek-balance", label: "DeepSeek", status: "ok", windows: [{ key: "balance", kind: "amount", amount: 1, currency: "CNY" }] };
-	const summary = mod.usageFormat.summarize([OPENCODE, deepseek], "opencode-go");
+	const summary = mod.usageFormat.summarize([OPENCODE, deepseek], [
+		{ planId: "opencode-go", metric: "rolling" },
+		{ planId: "opencode-go", metric: "monthly" }
+	]);
 	assert.equal(summary.top, 80);
-	assert.equal(summary.bottom, 12);
-	assert.equal(summary.topEntry.plan.id, "opencode-go");
-	const balanceOnly = mod.usageFormat.summarize([OPENCODE, deepseek], "deepseek");
+	assert.equal(summary.bottom, 54);
+	assert.equal(summary.topEntry.window.key, "rolling");
+	assert.equal(summary.bottomEntry.window.key, "monthly");
+	const balanceOnly = mod.usageFormat.summarize([OPENCODE, deepseek], [{ planId: "deepseek", metric: "balance" }]);
 	assert.equal(balanceOnly.hasPercent, false);
+	assert.equal(balanceOnly.hasAmount, true);
+	assert.equal(balanceOnly.topEntry.kind, "amount");
 });
 
 test("summarize follows the configured window order (first two drive the ring)", () => {
@@ -316,11 +322,14 @@ test("display config card renders multi-select plans, metrics and the icon choic
 				{ id: "opencode-go", windows: ["rolling", "monthly"] },
 				{ id: "deepseek", windows: ["balance"] }
 			],
-			iconPlanId: "opencode-go"
+			ring: [
+				{ planId: "opencode-go", metric: "rolling" },
+				{ planId: "deepseek", metric: "balance" }
+			]
 		}
 	});
 	const texts = textsOf(tree);
-	for (const expected of ["显示内容", "勾选要显示的套餐", "OpenCode Go", "DeepSeek", "侧栏圆环显示", "保存"]) {
+	for (const expected of ["显示内容", "勾选要显示的套餐", "OpenCode Go", "DeepSeek", "圆环显示（单独设置）", "上半", "下半", "不显示", "保存"]) {
 		assert.ok(texts.includes(expected), `missing ${expected}; got ${texts.join(" | ")}`);
 	}
 	assert.ok(texts.some((text) => text.includes("5 小时")));
@@ -329,6 +338,16 @@ test("display config card renders multi-select plans, metrics and the icon choic
 	assert.ok(texts.some((text) => text.includes("可添加指标")));
 	const checkboxes = nodesWhere(tree, (node) => node.type === "input" && node.props.type === "checkbox");
 	assert.equal(checkboxes.length, 2);
+});
+
+test("footer ring renders a currency glyph for a balance-only ring slot", () => {
+	const store = fakeStore({
+		plans: [DEEPSEEK],
+		display: { plans: [{ id: "deepseek", windows: ["balance"] }], ring: [{ planId: "deepseek", metric: "balance" }] },
+		status: "ok"
+	});
+	const tree = mod.usageFooterAction({ store, t: tr });
+	assert.ok(textsOf(tree).includes("¥"));
 });
 
 test("display config card renders its loading shell", () => {

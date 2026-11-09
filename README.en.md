@@ -62,11 +62,13 @@ Open Settings → Plugins → `Token Plan Usage`. The bundle page lets you:
   registered in DSH models;
 - per plan, pick and order 1–3 metrics. For OpenCode Go you can show only 5-hour,
   only weekly, or 5-hour + monthly / monthly + 5-hour;
-- pick **one** of the checked plans for the sidebar ring; its top arc is metric 1
-  and its bottom arc is metric 2. Xiaomi exposes plan total/balance; DeepSeek
-  exposes balance.
-- the whole form is checkboxes, buttons and a dropdown — no YAML/JSON or API
-  names to type. Save without touching the profile; the preference is stored in
+- configure the sidebar ring **separately**: pick a metric for the top half and
+  one for the bottom half (they may come from different plans); choose "Not shown"
+  for the lower half to display a single metric. Balance metrics show a currency
+  glyph in the ring center.
+- card and ring are independent; the ring may use a metric from a plan that is
+  not shown in the card (the host probes it automatically). The whole form is
+  checkboxes, buttons and dropdowns — no YAML/JSON or API names to type. Save without touching the profile; the preference is stored in
   `~/.dsh/dsh-token-plan-usage.json` (non-secret, no restart).
 
 The plugin does not read other plugins' settings. OpenCode Go's gateway URL and
