@@ -1,6 +1,6 @@
 # 用量口径与上游契约
 
-这份文档记录 v0.1.0 三个 plan 的数据来源、字段含义和归一化规则。上游都是非公开或半公开接口，
+这份文档记录 v0.1.1 三个 plan 的数据来源、字段含义和归一化规则。上游都是非公开或半公开接口，
 可能随服务方改动；插件对字段采取「坏字段丢弃、不坏整份」的策略，并在 UI 里保留原始 `status`。
 
 ## 1. OpenCode Go
@@ -11,8 +11,8 @@ authorization: Bearer <OPENCODE_GO_API_KEY>
 accept: application/json
 ```
 
-`baseURL` 默认 `https://opencode.ai/zen/go`；如果已经安装 `dsh-opencode-go-plus`，优先复用它的
-`baseURL`/`apiKeyEnv`（例如本地 relay `http://127.0.0.1:8788`）。若 `baseURL` 已带 `/v1`，不会重复拼接。
+`baseURL` 默认 `https://opencode.ai/zen/go`；本插件不读取其它插件的 settings，走本地 relay
+（例如 `http://127.0.0.1:8788`）时在 `plans[].baseURL` 里显式配置。若 `baseURL` 已带 `/v1`，不会重复拼接。
 
 响应：
 
@@ -46,7 +46,7 @@ Cookie: api-platform_serviceToken=…; userId=…
 - `tokenPlan/detail`：`{ code, data: { planCode, currentPeriodEnd, expired } }`；`currentPeriodEnd`
   是 `yyyy-MM-dd HH:mm:ss`（按 UTC 解析）。
 - `tokenPlan/usage`：`{ code, data: { monthUsage: { percent, items: [{ name, used, limit, percent }] } } }`；
-  `monthUsage.percent` 是 0..1，展示时 ×100。第一个 `items[]` 作为 Credits 计数行。
+  `monthUsage.percent` 是 0..1，宿主 ×100 后保存为已用比例；展示时再换算成剩余。第一个 `items[]` 作为 Credits 计数行。
 - 控制台的过期会话可能以 3xx 重定向到登录；插件把 3xx / 401 / 403 都映射为 `auth`。
 - balance 成功但 detail/usage 失败时，仍显示余额并标 `partial`。
 
@@ -76,9 +76,10 @@ authorization: Bearer <DEEPSEEK_API_KEY>
 
 ## 4. UI 归一化
 
-- 所有百分比在宿主侧 clamp 到 0..100；`percent` 表示已用。
-- 环：上弧 = 所有 plan 的短窗（`rolling`/`5h`/`session`）最大值；下弧 = 长窗（`weekly`/`monthly`）最大值；
-  弧长 = 已用。某窗口 `rate-limited`/`expired`/≥100% 时整环灰显。
+- 宿主返回的 `usedPercent` 是上游的**已用**比例并 clamp 到 0..100；客户端显示**剩余** = 100 − 已用，宿主不改口径。
+- 环：上弧 = 所有 plan 的短窗（`rolling`/`5h`/`session`）里**最小剩余**；下弧 = 长窗（`weekly`/`monthly`）里**最小剩余**；
+  弧长 = 剩余。某窗口 `rate-limited`/`expired`/已用 ≥100% 时整环灰显。
+- 卡片百分比列显示「剩余 N%」；额度为 0 时显示「剩余 0%」，重置列显示「已达限额」或「套餐已过期」。
 - 卡片：每个 plan 一个区块；窗口行三列 `标签 | 数值 | 重置/说明`；金额行显示币种与赠金/充值明细。
 - 失败保留 last-good：宿主缓存 30 秒 TTL + 单飞；失败时返回 `last`，客户端标「上次读数」。
 

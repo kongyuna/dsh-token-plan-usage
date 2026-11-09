@@ -2,13 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { Config, planDescriptors } from "../lib/config.js";
-import {
-	buildPlanView,
-	createCookieHandler,
-	createUsageHandler,
-	resolveCredential,
-	settingsValue
-} from "../lib/index.js";
+import { buildPlanView, createCookieHandler, createUsageHandler, resolveCredential } from "../lib/index.js";
 import { UsageCache } from "../lib/usage.js";
 
 // ── fixtures ──────────────────────────────────────────────────────────────
@@ -195,20 +189,6 @@ test("usage route keeps the previous reading when a plan later fails", async () 
 	assert.equal(opencode.last.windows.length, 3);
 });
 
-test("usage route honors the dsh-opencode-go-plus gateway override", async () => {
-	const fetchImpl = router({ "/v1/usage": { value: OPENCODE_USAGE } });
-	const handler = createUsageHandler({
-		plans: plansFor({ includeDefaults: true, plans: [] }),
-		cache: new UsageCache({ ttlMs: 0 }),
-		resolveCredential: async (ref) => (ref === "OPENCODE_GO_API_KEY" ? "sk-open" : undefined),
-		readSettings: (ns) => ns === "dsh-opencode-go-plus" ? { baseURL: "http://127.0.0.1:8788", apiKeyEnv: "OPENCODE_GO_API_KEY" } : undefined,
-		deps: { fetchImpl, now: () => 1 }
-	});
-	const res = fakeRes();
-	await handler(fakeRequest(), res);
-	assert.equal(fetchImpl.calls[0].url, "http://127.0.0.1:8788/v1/usage");
-});
-
 test("usage route reports no plans explicitly", async () => {
 	const handler = createUsageHandler({
 		plans: [],
@@ -390,16 +370,4 @@ test("resolveCredential prefers the credentials service and falls back to env", 
 	};
 	assert.equal(await resolveCredential(ctx, "A_KEY"), "from-store");
 	assert.equal(await resolveCredential(ctx, "MISSING_KEY"), undefined);
-});
-
-test("settingsValue reads both settings generations", () => {
-	const describeCtx = {
-		get: () => ({ describe: () => [{ ns: "x", value: { a: 1 } }] })
-	};
-	assert.deepEqual(settingsValue(describeCtx, "x"), { a: 1 });
-	const getCtx = {
-		get: () => ({ get: (ns) => ({ ns }) })
-	};
-	assert.deepEqual(settingsValue(getCtx, "x"), { ns: "x" });
-	assert.equal(settingsValue({ get: () => undefined }, "x"), undefined);
 });

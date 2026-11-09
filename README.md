@@ -2,26 +2,26 @@
 
 [English](README.en.md) | 中文
 
-一个**只读用量**的 DSH 插件：在侧栏账号行的右侧常驻一枚双半圆环，点开查看多个 token plan 的消耗。它从
-[dsh-opencode-go-plus](https://github.com/yumusb/dsh-opencode-go-plus)（以及
-[kongyuna 的个人 fork](https://github.com/kongyuna/kongyuna-opencode-go-plus)）的用量面板里把「环 + 卡片」
-抽出来，去掉了模型适配器、模型目录、响应修复和账号菜单 DOM 注入，改成官方 slot 实现。
+一个**只读用量**的 DSH 插件：在侧栏账号行的右侧常驻一枚双半圆环，点开查看多个 token plan 的消耗。
+独立实现，不依赖 `dsh-opencode-go-plus`；用量环/卡片的视觉与缓存思路参考了 MIT 的
+[dsh-opencode-go-plus](https://github.com/yumusb/dsh-opencode-go-plus) 与
+[kongyuna 的个人 fork](https://github.com/kongyuna/kongyuna-opencode-go-plus)，署名见文末。
 
-- 不注册 LLM 适配器，不发聊天请求，不改 `llm-pi-ai`，也不改现有 `dsh-opencode-go-plus` 的配置。
-- 与 `dsh-opencode-go-plus` 共存：它能继续负责模型；本插件只负责看用量，并优先复用它已配置的网关地址和凭据引用。
+- 不注册 LLM 适配器，不发聊天请求，不改 `llm-pi-ai`，也不读、不写 `dsh-opencode-go-plus` 的任何配置或 settings。
+- 与 `dsh-opencode-go-plus` **完全独立**：可以同时安装，也可以不装；OpenCode Go 的 `baseURL`、`credentialRef` 都由本插件自己的配置决定。
 - v1 支持：**OpenCode Go**、**小米 MiMo Token Plan**、**DeepSeek 余额**。
 
-> 口径提醒：面板里的百分比是**已用**，不是剩余；圆环弧长同样表示**已用**。0% 为空环，100% 为满环。
+> 口径提醒：面板里的百分比是**剩余**；圆环弧长同样表示**剩余**。0% 为空环（用完），100% 为满环（全新）。
 
 ---
 
 ## 界面
 
 - **侧栏账号行右侧**（头像/名称同一行）：一枚 36px 按钮，内含 28px 双半圆环；不再占用 Remote/Settings 那一行。
-  - 上弧 = 所有 plan 里「短窗」（5 小时/rolling）的最大已用百分比；
-  - 下弧 = 所有 plan 里「长窗」（每周/每月）的最大已用百分比；
-  - 某窗口 `rate-limited` / `expired` / ≥100% 时整环灰显；
-  - 悬停某条弧会浮出「哪个 plan、哪个窗口、已用多少」的提示。
+  - 上弧 = 所有 plan 里「短窗」（5 小时/rolling）的**最小剩余**百分比（最紧张的那个）;
+  - 下弧 = 所有 plan 里「长窗」（每周/每月）的**最小剩余**百分比；
+  - 某窗口 `rate-limited` / `expired` / 已用 100% 时整环灰显；
+  - 悬停某条弧会浮出「哪个 plan、哪个窗口、剩余多少」的提示。
 - **点击**：向上浮出用量卡片（右对齐、视口内 clamp，窄屏 `max-width: calc(100vw - 16px)`）。
   - 每个 plan 一个区块：名称、套餐名（如有）、控制台 `↗`、窗口行；
   - 窗口行是三列栅格 `标签 | 数值 | 重置/说明`；数字等宽、不截断，标签可省略；
@@ -64,10 +64,20 @@ dsh plugin --profile web add "/absolute/path/to/dsh-token-plan-usage"
 | 小米 MiMo Token Plan | `XIAOMI_TOKEN_PLAN_COOKIE`（Cookie） | `GET https://platform.xiaomimimo.com/api/v1/balance`、`/tokenPlan/detail`、`/tokenPlan/usage` |
 | DeepSeek | `DEEPSEEK_API_KEY` | `GET https://api.deepseek.com/user/balance` |
 
-### OpenCode Go 复用现有配置
+### OpenCode Go 独立配置
 
-如果你已经装了 `dsh-opencode-go-plus`，本插件会尝试读取它的 `baseURL` 和 `apiKeyEnv`，所以本地代理
-（例如 `http://127.0.0.1:8788`）不需要在这里再写一遍。显式写在 `plans` 里的值优先。
+本插件不读取其它插件的 settings。OpenCode Go 的网关地址和凭据引用由本插件自己的 `plans` 决定；
+如果你走本地 relay（例如 `http://127.0.0.1:8788`），把 `baseURL` 写在这里即可：
+
+```yaml
+plans:
+  - id: opencode-go
+    kind: opencode-go
+    credentialRef: OPENCODE_GO_API_KEY
+    baseURL: http://127.0.0.1:8788
+```
+
+`OPENCODE_GO_API_KEY` 只是一个凭据引用名；想换名字就改 `credentialRef`，不需要装 `dsh-opencode-go-plus`。
 
 ### 自定义/追加 plan
 
@@ -146,9 +156,10 @@ dsh plugin --profile web add "/absolute/path/to/dsh-token-plan-usage"
 
 ## 与 dsh-opencode-go-plus 的关系
 
-- 两者可以同时安装：`dsh-opencode-go-plus` 负责模型适配器与模型选择；本插件只读用量。
-- 本插件**不修改** `dsh-opencode-go-plus` 的配置文件、不卸载它、不写它的 settings namespace，只读取它的 `baseURL`/`apiKeyEnv` 作为默认值。
-- 如果你的 `dsh-opencode-go-plus` 版本里 already 有用量环，本插件与它不是替代关系：它的环绑定在账号菜单/侧栏 DOM 注入上；本插件走官方 `shell.overlay` slot，把按钮浮在账号行右侧、卡片浮层显示，不做 DOM 注入。
+- **完全独立**：不读取、不写入 `dsh-opencode-go-plus` 的配置或 settings，也不依赖它是否安装。
+- 两者可以同时安装：它继续负责模型；本插件只负责看用量。
+- 唯一共享的是凭据名 `OPENCODE_GO_API_KEY`（只是 DSH credentials 的一个引用名）；想彻底分开，就把 `credentialRef` 改成你自己的名字并单独存一份 Key。
+- 本插件走官方 `shell.overlay` slot，把按钮浮在账号行右侧、卡片浮层显示，不做 DOM 注入。
 
 ---
 

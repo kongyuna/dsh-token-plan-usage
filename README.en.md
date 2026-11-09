@@ -2,19 +2,20 @@
 
 A read-only DSH plugin that shows token-plan consumption from the sidebar:
 one two-half ring at the right edge of the account row, one popover card.
-Adapted from the usage panel in
+It is independent of `dsh-opencode-go-plus`; the visual/cache approach was
+adapted from the MIT-licensed usage panel in
 [dsh-opencode-go-plus](https://github.com/yumusb/dsh-opencode-go-plus) and
 [kongyuna/kongyuna-opencode-go-plus](https://github.com/kongyuna/kongyuna-opencode-go-plus),
 with the model adapter, model catalog, response repair layer, and account-menu
 DOM injection removed.
 
 - No LLM adapter, no chat requests, no `llm-pi-ai` changes.
-- Coexists with `dsh-opencode-go-plus`; reuses its gateway URL/credential refs
-  when present.
+- Fully independent of `dsh-opencode-go-plus`: it neither reads nor writes that
+  plugin's config/settings, and does not need it installed.
 - v1 plans: **OpenCode Go**, **Xiaomi MiMo Token Plan**, **DeepSeek balance**.
 
-The ring arc is **used**, not remaining: 0% is an empty arc, 100% is full. The
-card prints the same "used" percentages.
+The ring arc is **remaining**: 0% is an empty arc (exhausted), 100% is full
+(headroom). The card prints the same "N% left" percentages.
 
 ## Install
 
@@ -41,9 +42,12 @@ With no config, plans are discovered from the credential refs you already store:
 | Xiaomi MiMo | `XIAOMI_TOKEN_PLAN_COOKIE` | `platform.xiaomimimo.com/api/v1/{balance,tokenPlan/detail,tokenPlan/usage}` |
 | DeepSeek | `DEEPSEEK_API_KEY` | `GET https://api.deepseek.com/user/balance` |
 
-If `dsh-opencode-go-plus` is installed, its `baseURL` and `apiKeyEnv` are reused
-as defaults (explicit `plans` entries win). A plan can be added or overridden in
-the profile patch:
+`OPENCODE_GO_API_KEY` is only a DSH credential-reference name; rename it with
+`credentialRef` if you want full separation from any other OpenCode plugin.
+
+The plugin does not read other plugins' settings. OpenCode Go's gateway URL and
+credential ref come from this plugin's own `plans`; for a local relay, set
+`baseURL` explicitly. A plan can be added or overridden in the profile patch:
 
 ```yaml
 - id: dsh-token-plan-usage

@@ -75,6 +75,6 @@ test("READMEs document install, config, security and the ring semantics", async 
 		assert.match(text, /Cookie|Cookie/i);
 	}
 	assert.match(zh, /弧长/);
-	assert.match(zh, /已用/);
+	assert.match(zh, /剩余/);
 	assert.match(zh, /MIT/);
 });

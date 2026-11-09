@@ -7,7 +7,7 @@ import { test } from "node:test";
 // rendered tree without a browser.
 const BUNDLE = new URL("../lib/client.js", import.meta.url);
 
-function loadBundle({ executeEffects = false } = {}) {
+function loadBundle({ executeEffects = false, refNode = null } = {}) {
 	const source = readFileSync(BUNDLE, "utf8");
 	const entries = [];
 	const FRAGMENT = Symbol("Fragment");
@@ -27,7 +27,7 @@ function loadBundle({ executeEffects = false } = {}) {
 					useState: (initial) => [typeof initial === "function" ? initial() : initial, () => {}],
 					useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
 					useEffect: executeEffects ? (fn) => { fn(); } : () => {},
-					useRef: (initial) => ({ current: initial ?? null }),
+					useRef: (initial) => ({ current: refNode ?? initial ?? null }),
 					useCallback: (fn) => fn,
 					createElement: () => null
 				};
@@ -196,10 +196,10 @@ test("formatCreditRatio compacts big counters and refuses partial input", () => 
 
 // ── summarization ─────────────────────────────────────────────────────────
 
-test("summarize puts the most-used short window on top and long window below", () => {
+test("summarize puts the tightest short window on top and long window below", () => {
 	const summary = mod.usageFormat.summarize([OPENCODE, DEEPSEEK]);
-	assert.equal(summary.top, 20);
-	assert.equal(summary.bottom, 88);
+	assert.equal(summary.top, 80);
+	assert.equal(summary.bottom, 12);
 	assert.equal(summary.topEntry.window.key, "rolling");
 	assert.equal(summary.bottomEntry.window.key, "weekly");
 	assert.equal(summary.hasPercent, true);
@@ -209,14 +209,35 @@ test("summarize puts the most-used short window on top and long window below", (
 test("summarize treats a reached limit as exhausted", () => {
 	const summary = mod.usageFormat.summarize([{ ...OPENCODE, windows: [{ key: "weekly", kind: "percent", status: "rate-limited", usedPercent: 100 }] }]);
 	assert.equal(summary.exhausted, true);
-	assert.equal(summary.bottom, 100);
+	assert.equal(summary.bottom, 0);
 });
 
 test("summarize falls back when only a monthly window exists", () => {
 	const summary = mod.usageFormat.summarize([{ ...XIAOMI, status: "ok", windows: [{ key: "monthly", kind: "percent", usedPercent: 42 }] }]);
 	assert.equal(summary.top, 0);
-	assert.equal(summary.bottom, 42);
+	assert.equal(summary.bottom, 58);
 	assert.equal(summary.hasPercent, true);
+});
+
+test("summarize picks the tightest remaining headroom across plans", () => {
+	const tight = {
+		...OPENCODE,
+		id: "tight",
+		label: "Tight plan",
+		windows: [{ key: "rolling", kind: "percent", status: "ok", usedPercent: 95 }]
+	};
+	const summary = mod.usageFormat.summarize([OPENCODE, tight]);
+	assert.equal(summary.top, 5);
+	assert.equal(summary.topEntry.plan.id, "tight");
+});
+
+test("plan section prints remaining percentages instead of used", () => {
+	const tree = mod.planSection({ plan: OPENCODE, t: tr, localeTag: "zh-CN", store: fakeStore(), first: true });
+	const texts = textsOf(tree);
+	assert.ok(texts.includes("剩余 80%"));
+	assert.ok(texts.includes("剩余 12%"));
+	assert.ok(texts.includes("剩余 54%"));
+	assert.ok(!texts.some((text) => text.includes("已用")));
 });
 
 test("summarize marks a balance-only set as having no percent", () => {
@@ -227,8 +248,8 @@ test("summarize marks a balance-only set as having no percent", () => {
 });
 
 test("summaryText names the two arcs", () => {
-	assert.match(mod.usageFormat.summaryText(mod.usageFormat.summarize([OPENCODE]), tr), /5h 20%/);
-	assert.match(mod.usageFormat.summaryText(mod.usageFormat.summarize([OPENCODE]), tr), /周 88%/);
+	assert.match(mod.usageFormat.summaryText(mod.usageFormat.summarize([OPENCODE]), tr), /5h 80%/);
+	assert.match(mod.usageFormat.summaryText(mod.usageFormat.summarize([OPENCODE]), tr), /周 12%/);
 });
 
 // ── anchors / visibility ──────────────────────────────────────────────────
@@ -272,7 +293,7 @@ test("footer action renders a labeled ring with the right expanded state", () =>
 	const buttons = nodesWhere(tree, (node) => node.type === "button");
 	assert.equal(buttons.length, 1);
 	assert.match(buttons[0].props["aria-label"], /Token 用量/);
-	assert.match(buttons[0].props["aria-label"], /5h 20%/);
+	assert.match(buttons[0].props["aria-label"], /5h 80%/);
 	assert.equal(buttons[0].props["aria-expanded"], "false");
 	assert.equal(nodesWhere(tree, (node) => node.props?.["data-tpu"] === "ring").length, 1);
 });
@@ -282,6 +303,24 @@ test("footer action reports an open card", () => {
 	const tree = mod.usageFooterAction({ store, t: tr });
 	const button = nodesWhere(tree, (node) => node.type === "button")[0];
 	assert.equal(button.props["aria-expanded"], "true");
+});
+
+test("activating the ring anchors the card above the trigger instead of at its viewport bottom", () => {
+	const node = {
+		getBoundingClientRect: () => ({ left: 10, right: 46, top: 800, bottom: 836, width: 36, height: 36 })
+	};
+	const { mod: clickMod } = loadBundle({ refNode: node });
+	const calls = [];
+	const store = {
+		...fakeStore({ plans: [OPENCODE] }),
+		toggle: (anchor) => {
+			calls.push(anchor);
+		}
+	};
+	const tree = clickMod.usageFooterAction({ store, t: tr });
+	const button = nodesWhere(tree, (item) => item.type === "button")[0];
+	button.props.onClick({ preventDefault() {}, stopPropagation() {} });
+	assert.deepEqual(calls[0], { left: 8, bottom: 106 });
 });
 
 test("footer placement effect runs without throwing and falls back when the account row is absent", () => {
@@ -331,7 +370,7 @@ test("card renders every plan, its windows and the Xiaomi setup affordance", () 
 	});
 	const tree = mod.usageCardLayer({ store, t: tr, getLocale: () => "zh-CN" });
 	const texts = textsOf(tree);
-	for (const expected of ["OpenCode Go", "Xiaomi MiMo", "DeepSeek", "20%", "88%", "46%", "需要控制台 Cookie", "设置 Cookie", "余额"]) {
+	for (const expected of ["OpenCode Go", "Xiaomi MiMo", "DeepSeek", "剩余 80%", "剩余 12%", "剩余 54%", "需要控制台 Cookie", "设置 Cookie", "余额"]) {
 		assert.ok(texts.includes(expected), `missing ${expected}; got ${texts.join(" | ")}`);
 	}
 	const cards = nodesWhere(tree, (node) => node.props?.["data-tpu"] === "card");
@@ -370,15 +409,15 @@ test("card shows last-good rows while a plan is failing", () => {
 	const store = fakeStore({ plans: [plan], open: true, anchor: { left: 8, bottom: 100 } });
 	const tree = mod.usageCardLayer({ store, t: tr, getLocale: () => "zh-CN" });
 	const texts = textsOf(tree);
-	assert.ok(texts.includes("12%"));
+	assert.ok(texts.includes("剩余 88%"));
 	assert.ok(texts.includes("凭据无效 · 上次读数"));
 });
 
 test("card is absent when closed but still renders a hover tip", () => {
-	const store = fakeStore({ plans: [OPENCODE], open: false, tip: { arc: "top", text: "OpenCode Go · 5 小时 已用 20%", left: 10, bottom: 40 } });
+	const store = fakeStore({ plans: [OPENCODE], open: false, tip: { arc: "top", text: "OpenCode Go · 5 小时 剩余 80%", left: 10, bottom: 40 } });
 	const tree = mod.usageCardLayer({ store, t: tr, getLocale: () => "zh-CN" });
 	assert.equal(nodesWhere(tree, (node) => node.props?.["data-tpu"] === "card").length, 0);
 	const tips = nodesWhere(tree, (node) => node.props?.["data-tpu"] === "tip");
 	assert.equal(tips.length, 1);
-	assert.equal(tips[0].props.children, "OpenCode Go · 5 小时 已用 20%");
+	assert.equal(tips[0].props.children, "OpenCode Go · 5 小时 剩余 80%");
 });
