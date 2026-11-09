@@ -318,30 +318,37 @@ test("display config card renders multi-select plans, metrics and the icon choic
 				{ id: "opencode-go", kind: "opencode-go", label: "OpenCode Go", metrics: ["rolling", "weekly", "monthly"] },
 				{ id: "deepseek", kind: "deepseek-balance", label: "DeepSeek", metrics: ["balance"] }
 			],
-			selectedPlans: [
-				{ id: "opencode-go", windows: ["rolling", "monthly"] },
-				{ id: "deepseek", windows: ["balance"] }
-			],
+			selectedPlans: ["opencode-go", "deepseek"],
 			ring: [
 				{ planId: "opencode-go", metric: "rolling" },
 				{ planId: "deepseek", metric: "balance" }
 			]
-		}
+		},
+		initialPreview: { status: "ready", plans: [OPENCODE, DEEPSEEK] }
 	});
 	const texts = textsOf(tree);
-	for (const expected of ["显示内容", "OpenCode Go", "DeepSeek", "显示指标（按顺序）", "圆环显示（单独设置）", "上半", "下半", "不显示", "保存"]) {
+	for (const expected of ["显示内容", "显示套餐（多选）", "OpenCode Go", "DeepSeek", "圆环显示（单独设置）", "上半", "下半", "不显示", "满额", "示例效果", "保存"]) {
 		assert.ok(texts.includes(expected), `missing ${expected}; got ${texts.join(" | ")}`);
 	}
 	assert.ok(texts.some((text) => text.includes("5 小时")));
 	assert.ok(texts.some((text) => text.includes("余额")));
 	assert.ok(texts.some((text) => text.includes("每月")));
-	assert.ok(texts.some((text) => text.includes("可添加指标")));
 	const checkboxes = nodesWhere(tree, (node) => node.type === "input" && node.props.type === "checkbox");
 	assert.equal(checkboxes.length, 2);
 	const saveButton = nodesWhere(tree, (node) => node.type === "button" && node.props.children === "保存")[0];
 	assert.ok(saveButton);
 	assert.match(saveButton.props.style.color, /label-primary/);
 	assert.match(saveButton.props.style.background, /bg-layer-3/);
+});
+
+test("summarize turns a balance slot with capacity into a ratio arc", () => {
+	const summary = mod.usageFormat.summarize([DEEPSEEK], [{ planId: "deepseek", metric: "balance", capacity: 200 }]);
+	assert.equal(summary.topEntry.kind, "amount");
+	assert.equal(summary.topEntry.capacity, 200);
+	assert.ok(Math.abs(summary.top - 55) < 0.001);
+	assert.equal(summary.hasArc, true);
+	const amountOnly = mod.usageFormat.summarize([DEEPSEEK], [{ planId: "deepseek", metric: "balance" }]);
+	assert.equal(amountOnly.hasArc, false);
 });
 
 test("footer ring renders a currency glyph for a balance-only ring slot", () => {

@@ -58,14 +58,15 @@ Settings → Models first, then set the console cookie.
 
 Open Settings → Plugins → `Token Plan Usage`. The bundle page lets you:
 
-- check any number of plans to show in the card; options come only from services
-  registered in DSH models;
-- per plan, pick and order 1–3 metrics. For OpenCode Go you can show only 5-hour,
-  only weekly, or 5-hour + monthly / monthly + 5-hour;
+- two cards: **display settings on the left**, a live **preview on the right**;
+- check any number of plans to show in the card; each selected plan renders its
+  complete metric set (OpenCode Go: 5-hour/weekly/monthly; DeepSeek: balance;
+  Xiaomi: total/balance);
 - configure the sidebar ring **separately**: pick a metric for the top half and
   one for the bottom half (they may come from different plans); choose "Not shown"
-  for the lower half to display a single metric. Balance metrics show a currency
-  glyph in the ring center.
+  for the lower half to display a single metric. A balance slot accepts an
+  optional **full amount** to draw balance/full as a ratio; without it the ring
+  only shows the amount glyph.
 - card and ring are independent; the ring may use a metric from a plan that is
   not shown in the card (the host probes it automatically). The whole form is
   checkboxes, buttons and dropdowns — no YAML/JSON or API names to type. Save without touching the profile; the preference is stored in
