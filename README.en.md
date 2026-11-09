@@ -1,22 +1,21 @@
-# dsh-token-plan-usage
+# Token Plan Usage for DSH
 
-Read-only token-plan usage: a sidebar ring plus a popover card. Plan options come
-from services already registered in DSH models; no manual plan setup.
+**Know how much of your AI plans is left without leaving DSH.**
 
-- Plans: **OpenCode Go**, **DeepSeek balance**, **Xiaomi Token Plan** (shown only
-  when the matching provider is registered in DSH models).
-- DeepSeek balance source order: the signed-in DSH DeepSeek account wallet
-  (`deepseekAccount.getBalance`, no API key needed) first; when the account is
-  signed out, unreadable or unavailable, fall back to `DEEPSEEK_API_KEY` and
-  `GET /user/balance`. The API-key side only exposes balance amounts — the
-  official API has no usage/quota endpoint.
-- Values are **remaining**; ring arc length = remaining (0% exhausted, 100% fresh).
-  Balance metrics accept an optional full amount for a ratio arc.
-- Configure it on **Settings → Plugins → Token Plan Usage** with checkboxes and
-  dropdowns; no file editing required.
-- Credentials: `OPENCODE_GO_API_KEY` / `DEEPSEEK_API_KEY` (optional when signed in
-  to DeepSeek) / `XIAOMI_TOKEN_PLAN_COOKIE` (Xiaomi usage needs the console Cookie).
-- Install: `plugin_manager install_bundle target=<path-to-this-directory>`; for a
-  local build, `npm pack` and install `target=file:<absolute path to the tgz>`.
-- Full guide: `docs/GUIDE.md`; data contracts: `docs/quotas.md`. MIT; see
-  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Glance at the sidebar ring; expand to see each service's balance, quota and reset time. **Every plan in one place, ring metrics freely combined** — no more console hopping.
+
+| Service | What you can see |
+|---|---|
+| **OpenCode Go** | **Remaining** 5-hour, weekly and monthly quota, plus reset times |
+| **DeepSeek** | The signed-in account's **wallet balance**; when unavailable it falls back to the API-key balance endpoint (not token usage quota) |
+| **Xiaomi MiMo** | Token Plan usage and account balance (console Cookie required) |
+
+**Works out of the box**: only providers already registered in DSH models are shown; pick plans and ring halves under **Settings → Plugins → Token Plan Usage**, with a live preview. No config files.
+
+**Install**: run `plugin_manager install_bundle target=/absolute/path/to/dsh-token-plan-usage` in DSH (replace the path with this repository's local directory).
+
+**Data & safety**: percentages and ring arc lengths mean **remaining**, not used. Credentials are stored and used by the DSH host; except while you paste a Cookie, stored credentials are never returned to the browser. The plugin sends no model chat requests.
+
+[Install, configuration and troubleshooting](docs/GUIDE.md) · [Data semantics and limits](docs/quotas.md) · [中文](README.md) · MIT License
+
+Credentials: `OPENCODE_GO_API_KEY`, `DEEPSEEK_API_KEY` (optional when signed in), `XIAOMI_TOKEN_PLAN_COOKIE` (Xiaomi usage).

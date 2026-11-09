@@ -311,6 +311,33 @@ test("probeXiaomi keeps the balance when plan detail fails", async () => {
 	assert.equal(result.windows.some((window) => window.key === "monthly"), true);
 });
 
+test("probeXiaomi marks a malformed detail payload as partial", async () => {
+	const fetchImpl = router({
+		"/balance": { value: XIAOMI_BALANCE },
+		"/tokenPlan/detail": { value: { code: 0 } },
+		"/tokenPlan/usage": { value: XIAOMI_USAGE }
+	});
+	const result = await probeXiaomi({ cookie: COOKIE, baseURL: "https://mimo.example/api/v1", deps: { fetchImpl } });
+	assert.equal(result.ok, true);
+	assert.equal(result.partial, true);
+	const monthly = result.windows.find((window) => window.key === "monthly");
+	assert.equal(monthly.usedPercent, 42);
+});
+
+test("probeXiaomi marks an unusable usage payload as partial", async () => {
+	const fetchImpl = router({
+		"/balance": { value: XIAOMI_BALANCE },
+		"/tokenPlan/detail": { value: XIAOMI_DETAIL },
+		"/tokenPlan/usage": { value: { code: 0, data: {} } }
+	});
+	const result = await probeXiaomi({ cookie: COOKIE, baseURL: "https://mimo.example/api/v1", deps: { fetchImpl } });
+	assert.equal(result.ok, true);
+	assert.equal(result.partial, true);
+	const monthly = result.windows.find((window) => window.key === "monthly");
+	assert.equal(monthly.status, "ok");
+	assert.equal(monthly.usedPercent, undefined);
+});
+
 test("probeXiaomi rejects an invalid cookie before any request", async () => {
 	let calls = 0;
 	const result = await probeXiaomi({ cookie: "userId=42", deps: { fetchImpl: async () => { calls += 1; } } });

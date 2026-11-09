@@ -1,6 +1,6 @@
 {
   "name": "dsh-token-plan-usage",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "DSH plugin: a standalone viewer for token-plan consumption (OpenCode Go, Xiaomi MiMo, DeepSeek) with no LLM adapter.",
   "icon": "icon.svg",
@@ -15,6 +15,7 @@
   },
   "files": [
     "lib",
+    "docs",
     "locale/*.json",
     "icon.svg",
     "cordis.patch.yml",

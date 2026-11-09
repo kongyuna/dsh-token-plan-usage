@@ -362,6 +362,65 @@ test("summarize turns a balance slot with capacity into a ratio arc", () => {
 	assert.equal(amountOnly.hasArc, false);
 });
 
+test("summarize falls back to the last good windows for the ring", () => {
+	const failing = {
+		...OPENCODE,
+		status: "auth",
+		windows: [],
+		last: { windows: [{ key: "weekly", kind: "percent", status: "ok", usedPercent: 88, resetsAt: "2026-11-09T00:00:00.000Z" }], fetchedAt: 5 }
+	};
+	const summary = mod.usageFormat.summarize([failing], [{ planId: "opencode-go", metric: "weekly" }]);
+	assert.equal(summary.topEntry.window.key, "weekly");
+	assert.equal(summary.top, 12);
+});
+
+test("summarize keeps ring slot positions when the first metric is missing", () => {
+	const summary = mod.usageFormat.summarize([OPENCODE], [
+		{ planId: "opencode-go", metric: "missing" },
+		{ planId: "opencode-go", metric: "weekly" }
+	]);
+	assert.equal(summary.topEntry, null);
+	assert.equal(summary.top, 0);
+	assert.equal(summary.bottomEntry.window.key, "weekly");
+	assert.equal(summary.bottom, 12);
+});
+
+test("an exhausted arc does not mute the whole ring", () => {
+	const plan = {
+		...OPENCODE,
+		windows: [
+			{ key: "rolling", kind: "percent", status: "ok", usedPercent: 100 },
+			{ key: "weekly", kind: "percent", status: "ok", usedPercent: 50 }
+		]
+	};
+	const ring = [
+		{ planId: "opencode-go", metric: "rolling" },
+		{ planId: "opencode-go", metric: "weekly" }
+	];
+	const summary = mod.usageFormat.summarize([plan], ring);
+	assert.equal(summary.exhausted, true);
+	assert.equal(summary.topExhausted, true);
+	assert.equal(summary.bottomExhausted, false);
+	assert.equal(summary.bottom, 50);
+	const store = fakeStore({ plans: [plan], display: { plans: [{ id: "opencode-go" }], ring }, status: "ok" });
+	const tree = mod.usageFooterAction({ store, t: tr });
+	const button = nodesWhere(tree, (node) => node.type === "button")[0];
+	assert.equal(button.props.style.opacity, undefined);
+});
+
+test("previewURL encodes the unsaved selection for a one-shot probe", () => {
+	const url = mod.usageFormat.previewURL(["opencode-go", "deepseek"], [
+		{ planId: "deepseek", metric: "balance", capacity: 200 },
+		{ planId: "opencode-go", metric: "rolling" }
+	]);
+	const parsed = new URL(url, "http://localhost");
+	assert.equal(parsed.pathname, "/dsh-token-plan-usage/usage");
+	assert.equal(parsed.searchParams.get("preview"), "1");
+	assert.equal(parsed.searchParams.get("refresh"), "1");
+	assert.equal(parsed.searchParams.get("plans"), "opencode-go,deepseek");
+	assert.equal(parsed.searchParams.get("ring"), "deepseek::balance::200,opencode-go::rolling");
+});
+
 test("footer ring renders a currency glyph for a balance-only ring slot", () => {
 	const store = fakeStore({
 		plans: [DEEPSEEK],

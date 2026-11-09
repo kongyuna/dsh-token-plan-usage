@@ -1,6 +1,6 @@
 # dsh-token-plan-usage
 
-[English](README.en.md) | 中文
+[English](../README.en.md) | 中文
 
 一个**只读用量**的 DSH 插件：在侧栏账号行的右侧常驻一枚双半圆环，点开查看多个 token plan 的消耗。
 独立实现，不依赖 `dsh-opencode-go-plus`；用量环/卡片的视觉与缓存思路参考了 MIT 的

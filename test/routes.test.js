@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import { Config, planDescriptors } from "../lib/config.js";
-import { buildPlanView, createConfigHandler, createCookieHandler, createUsageHandler, planInScope, resolveAccountClient, resolveCredential } from "../lib/index.js";
+import { buildPlanView, createConfigHandler, createCookieHandler, createUsageHandler, planInScope, previewDisplayState, resolveAccountClient, resolveCredential } from "../lib/index.js";
 import { UsageCache } from "../lib/usage.js";
 
 // ── fixtures ──────────────────────────────────────────────────────────────
@@ -428,6 +428,53 @@ test("config route rejects a plan outside the model scope and an empty selection
 	assert.deepEqual(saved, []);
 });
 
+test("config route requires a same-origin JSON write", async () => {
+	const saved = [];
+	const handler = createConfigHandler({
+		plans: plansFor(),
+		listProviders: () => ["opencode-go"],
+		readDisplay: () => ({}),
+		writeDisplay: (state) => {
+			saved.push(state);
+		},
+		getOrigin: () => "http://127.0.0.1:61830"
+	});
+	const body = JSON.stringify({ plans: ["opencode-go"], ring: [{ planId: "opencode-go", metric: "rolling" }] });
+	const wrongOrigin = fakeRes();
+	await handler(fakeRequest({
+		method: "POST",
+		headers: { origin: "http://evil.example", "content-type": "application/json" },
+		body
+	}), wrongOrigin);
+	assert.equal(wrongOrigin.statusCode, 403);
+	assert.equal(wrongOrigin.body.code, "origin");
+	const missingOrigin = fakeRes();
+	await handler(fakeRequest({
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body
+	}), missingOrigin);
+	assert.equal(missingOrigin.statusCode, 403);
+	const noType = fakeRes();
+	await handler(fakeRequest({
+		method: "POST",
+		headers: { origin: "http://127.0.0.1:61830" },
+		body
+	}), noType);
+	assert.equal(noType.statusCode, 415);
+	assert.equal(noType.body.code, "content-type");
+	assert.deepEqual(saved, []);
+	const accepted = fakeRes();
+	await handler(fakeRequest({
+		method: "POST",
+		headers: { origin: "http://127.0.0.1:61830", "content-type": "application/json" },
+		body
+	}), accepted);
+	assert.equal(accepted.statusCode, 200);
+	assert.equal(accepted.body.ok, true);
+	assert.equal(saved.length, 1);
+});
+
 test("config route saves multiple plans and a separate ring selection", async () => {
 	let saved = null;
 	const handler = createConfigHandler({
@@ -467,6 +514,77 @@ test("usage route reports no plans explicitly", async () => {
 	await handler(fakeRequest(), res);
 	assert.equal(res.body.reason, "no-plans");
 	assert.deepEqual(res.body.plans, []);
+});
+
+test("usage route reports a host failure as HTTP 500 instead of an empty success", async () => {
+	const handler = createUsageHandler({
+		plans: plansFor(),
+		cache: new UsageCache({ ttlMs: 0 }),
+		resolveCredential: async () => "sk-open",
+		listProviders: () => ["opencode-go"],
+		readDisplay: () => {
+			throw new Error("display store failed");
+		},
+		deps: { fetchImpl: async () => jsonResponse({}), now: () => 1 }
+	});
+	const res = fakeRes();
+	await handler(fakeRequest(), res);
+	assert.equal(res.statusCode, 500);
+	assert.equal(res.body.ok, false);
+	assert.equal(res.body.code, "internal");
+	assert.equal("plans" in res.body, false);
+});
+
+test("usage route keeps a healthy plan when another plan's probe throws", async () => {
+	const fetchImpl = router({ "/user/balance": { value: DEEPSEEK_BALANCE } });
+	const handler = createUsageHandler({
+		plans: plansFor(),
+		cache: new UsageCache({ ttlMs: 0 }),
+		resolveCredential: async (ref) => {
+			if (ref === "OPENCODE_GO_API_KEY") throw new Error("credential store unavailable");
+			return ref === "DEEPSEEK_API_KEY" ? "sk-deep" : undefined;
+		},
+		listProviders: () => ["opencode-go", "deepseek-official"],
+		readDisplay: () => ({ plans: ["opencode-go", "deepseek"], ring: [{ planId: "deepseek", metric: "balance" }] }),
+		deps: { fetchImpl, now: () => 1 }
+	});
+	const res = fakeRes();
+	await handler(fakeRequest(), res);
+	assert.equal(res.statusCode, 200);
+	const byId = Object.fromEntries(res.body.plans.map((plan) => [plan.id, plan]));
+	assert.equal(byId["opencode-go"].status, "internal");
+	assert.equal(byId.deepseek.status, "ok");
+});
+
+test("usage route probes an unsaved preview selection", async () => {
+	const account = fakeAccount(ACCOUNT_BALANCE);
+	const handler = createUsageHandler({
+		plans: plansFor(),
+		cache: new UsageCache({ ttlMs: 0 }),
+		resolveCredential: async (ref) => (ref === "OPENCODE_GO_API_KEY" ? "sk-open" : undefined),
+		listProviders: () => ["opencode-go", "deepseek-account"],
+		getAccount: () => account,
+		accountClient: ACCOUNT_CLIENT,
+		readDisplay: () => ({ plans: ["opencode-go"], ring: [{ planId: "opencode-go", metric: "rolling" }] }),
+		deps: { fetchImpl: router({ "/zen/go/v1/usage": { value: OPENCODE_USAGE } }), now: () => 1 }
+	});
+	const res = fakeRes();
+	await handler(fakeRequest({ url: "/dsh-token-plan-usage/usage?preview=1&plans=opencode-go%2Cdeepseek&ring=deepseek%3A%3Abalance" }), res);
+	assert.equal(res.statusCode, 200);
+	assert.deepEqual(res.body.plans.map((plan) => plan.id), ["opencode-go", "deepseek"]);
+	assert.equal(res.body.plans[1].status, "ok");
+});
+
+test("previewDisplayState sanitizes the unsaved selection without injecting defaults", () => {
+	const plans = plansFor();
+	assert.deepEqual(previewDisplayState(plans, ["deepseek", "bogus"], ["deepseek::balance::200", "deepseek::bogus", "opencode-go::rolling"]), {
+		plans: ["deepseek"],
+		ring: [
+			{ planId: "deepseek", metric: "balance", capacity: 200 },
+			{ planId: "opencode-go", metric: "rolling" }
+		]
+	});
+	assert.equal(previewDisplayState(plans, [], []), undefined);
 });
 
 // ── plan view ─────────────────────────────────────────────────────────────
