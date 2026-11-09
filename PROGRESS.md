@@ -1,5 +1,16 @@
 # PROGRESS
 
+## 当前状态（压缩摘要，供新会话直接接手）
+
+- 项目：`01_Projects 项目/dsh-token-plan-usage`；HEAD `165d927`，tag `v0.2.0`，git 干净。
+- 功能：侧栏圆环（只显示 1 个套餐）+ 浮层卡片（可显示多选套餐）；插件详情页可视化配置多选套餐、每套餐指标顺序、圆环单选套餐。
+- 数据源：套餐选项来自 `ctx.llm.listProviders()`；当前 providers=`deepseek-official`/`deepseek-account`/`opencode-go`，无小米 provider，所以小米不显示。
+- 当前配置（`~/.dsh/dsh-token-plan-usage.json`）：`opencode-go: rolling+monthly`、`deepseek: balance`，`iconPlanId=opencode-go`。
+- 口径：UI 显示剩余（100−used）；圆环上/下弧 = 圆环套餐的第 1/2 个指标。
+- 测试：`node --test` 127 pass / 0 fail / 0 skipped；`node --check lib/*.js` 通过。
+- 未验证：DSH 窗口被关闭，插件详情页配置卡片未做截图；配置路由、配置卡片渲染/多套餐逻辑已有测试与 curl 证据。
+- 下一步（如需）：打开 DSH → 设置 → 插件 → Token Plan 用量，确认可视化配置页；若打开后无配置卡，查 `plugins.bundle.config` 注册与 host `/dsh-token-plan-usage/config` 路由。
+
 目标：让 `dsh-token-plan-usage` 在 DSH 侧栏显示一个套餐的用量环，点开卡片显示用户勾选的多个套餐；插件详情页提供可视化配置（多选套餐、每套餐指标顺序、圆环单选套餐）；环与卡片显示**剩余**；插件与 `dsh-opencode-go-plus` 完全独立。
 顺序：基线核对 → 环/卡片真机可见 → 剩余口径与解耦 → provider 范围过滤 → 详情页可视化配置（多套餐 + 单环）→ 全量测试 → push/tag。
 最大风险：账号行/overlay 结构变化、macOS 辅助访问限制、DSH 窗口被关闭导致配置页无法截图。
@@ -18,7 +29,7 @@
 - [x] 回归测试：127 pass / 0 fail / 0 skipped；覆盖剩余、provider 范围、多套餐配置读写、配置卡片渲染、环锚点。
 - [x] 窄窗：DSH 最小窗宽 520px（390 做不到）；520px 下卡片 300px 宽、无横向溢出。
 - [x] 解耦核对：`lib/`、`test/` 中已无 `dsh-opencode-go-plus` 的功能引用（只剩 MIT 署名）。
-- [ ] push 到 `kongyuna/dsh-token-plan-usage`，打 v0.2.0 tag。
+- [x] push 到 `kongyuna/dsh-token-plan-usage`，打 v0.2.0 tag。
 
 ## 说明
 
