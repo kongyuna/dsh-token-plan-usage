@@ -8,6 +8,7 @@
 - 当前配置（`~/.dsh/dsh-token-plan-usage.json`）：卡片 `opencode-go: rolling+monthly`、`deepseek: balance`；圆环上半 `opencode-go rolling`，下半 `deepseek balance`（余额以 ¥ 显示）。
 - 口径：UI 显示剩余（100−used）；圆环上半/下半按详情页独立选择。
 - 测试：`node --test` 128 pass / 0 fail / 0 skipped；`node --check lib/*.js` 通过。
+- [x] UI 收尾：保存按钮改为主题中性色（原 brand token 在深色主题变白导致白底白字）；配置页删掉多余说明，只留标题/套餐勾选/指标/圆环上下半。
 - 未验证：DSH 窗口被关闭，插件详情页配置卡片（含圆环上半/下半）未做截图；配置路由、配置卡片渲染/多套餐/圆环槽位逻辑已有测试与 curl 证据。
 - 下一步（如需）：打开 DSH → 设置 → 插件 → Token Plan 用量，确认可视化配置页；若打开后无配置卡，查 `plugins.bundle.config` 注册与 host `/dsh-token-plan-usage/config` 路由。
 

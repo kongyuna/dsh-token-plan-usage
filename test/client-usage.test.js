@@ -329,7 +329,7 @@ test("display config card renders multi-select plans, metrics and the icon choic
 		}
 	});
 	const texts = textsOf(tree);
-	for (const expected of ["显示内容", "勾选要显示的套餐", "OpenCode Go", "DeepSeek", "圆环显示（单独设置）", "上半", "下半", "不显示", "保存"]) {
+	for (const expected of ["显示内容", "OpenCode Go", "DeepSeek", "显示指标（按顺序）", "圆环显示（单独设置）", "上半", "下半", "不显示", "保存"]) {
 		assert.ok(texts.includes(expected), `missing ${expected}; got ${texts.join(" | ")}`);
 	}
 	assert.ok(texts.some((text) => text.includes("5 小时")));
@@ -338,6 +338,10 @@ test("display config card renders multi-select plans, metrics and the icon choic
 	assert.ok(texts.some((text) => text.includes("可添加指标")));
 	const checkboxes = nodesWhere(tree, (node) => node.type === "input" && node.props.type === "checkbox");
 	assert.equal(checkboxes.length, 2);
+	const saveButton = nodesWhere(tree, (node) => node.type === "button" && node.props.children === "保存")[0];
+	assert.ok(saveButton);
+	assert.match(saveButton.props.style.color, /label-primary/);
+	assert.match(saveButton.props.style.background, /bg-layer-3/);
 });
 
 test("footer ring renders a currency glyph for a balance-only ring slot", () => {
